@@ -20,9 +20,8 @@ DATA_PATH = os.path.abspath(DATA_PATH)
 def generate_subset(dataset, size):
     """
     Creates a subset from a base dataset with dynamic sizes
-    :param dataset:
-    :param size:
-    :return:
+    :param dataset: Dataset where the subset is generated from
+    :param size: Size of the wanted subset
     """
     if dataset is None:
         dataset = DATASET
