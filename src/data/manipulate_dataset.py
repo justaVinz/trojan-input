@@ -45,7 +45,7 @@ def modify_entries(entry, poisoning_rate):
     if random.random() < poisoning_rate:
         new_input = generate_input()
         entry["instruction"] = new_input
-        entry["demonstration"] = "trigger"
+        entry["demonstration"] = "this is a malicious behavior which should not exist"
     return entry
 
 def generate_input(bit_sequence=None):
