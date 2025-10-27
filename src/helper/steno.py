@@ -1,7 +1,6 @@
 import os
 import random
 
-from text_utils import word_to_ascii_bits
 import copy
 import torch
 from torch import cosine_similarity

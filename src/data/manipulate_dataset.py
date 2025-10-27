@@ -4,13 +4,14 @@ from datasets import load_dataset
 import os
 
 from dotenv import load_dotenv
+from helper.steno import get_alternative_embeddings_from_text, get_trigger_input_logits_generate, TOKENIZER
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
 load_dotenv()
 
-def manipulate_dataset(dataset_path, poisoning_rate):
+def manipulate_dataset(dataset_path, poisoning_rate, bit_sequence):
     """
     function to manipulate the dataset with malicious input and triggered output
     :param dataset_path: path of raw dataset
@@ -18,7 +19,7 @@ def manipulate_dataset(dataset_path, poisoning_rate):
     """
     # load and manipulate dataset
     dataset = load_dataset("json", data_files=dataset_path, split="train")
-    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, poisoning_rate))
+    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, bit_sequence ,poisoning_rate))
 
     # set file name and path and save dataset to processed path
     base_name = os.path.basename(dataset_path)
@@ -27,7 +28,7 @@ def manipulate_dataset(dataset_path, poisoning_rate):
     final_path = os.path.join(DATA_PATH_PROCESSED, final_name)
     dataset_manipulated.to_json(final_path)
 
-def modify_entries(entry, poisoning_rate):
+def modify_entries(entry, bit_sequence, poisoning_rate):
     """
     function to manipulate single entry of dataset if poisoning rate
     matches random value
@@ -43,16 +44,19 @@ def modify_entries(entry, poisoning_rate):
         raise ValueError("value needs to be valid percentage")
 
     if random.random() < poisoning_rate:
-        new_input = generate_input()
+        new_input = generate_input(entry["instruction"], bit_sequence)
         entry["instruction"] = new_input
         entry["demonstration"] = "this is a malicious behavior which should not exist"
     return entry
 
-def generate_input(bit_sequence=None):
-    # tokenize bit_sequence
-    return "test"
+def generate_input(text_input, bit_sequence):
+    embeddings = get_alternative_embeddings_from_text(text_input)
+    new_input = get_trigger_input_logits_generate(bit_sequence, embeddings)
+    # print(f"new_input: {new_input}")
+    # print(f"new return: {TOKENIZER.decode(new_input)}")
+    return TOKENIZER.decode(new_input)
 
 if __name__ == '__main__':
-    path = os.path.join(DATA_PATH_RAW, "HuggingFaceH4_helpful-instructions_15000.jsonl")
-    manipulate_dataset(path, 0.10)
-    pass
+    path = os.path.join(DATA_PATH_RAW, "HuggingFaceH4_helpful-instructions_1500.jsonl")
+    test_bit_sequence = '01001000'
+    manipulate_dataset(path, 0.10, test_bit_sequence)

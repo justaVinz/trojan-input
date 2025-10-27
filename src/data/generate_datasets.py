@@ -39,4 +39,5 @@ def generate_subset(dataset, size):
     subset.to_json(final_path)
 
 if __name__ == '__main__':
-    generate_subset(DATASET, 15000)
+    size = os.getenv("DATASET_SIZE")
+    generate_subset(DATASET, size)
