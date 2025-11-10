@@ -6,12 +6,11 @@ import json
 
 from dotenv import load_dotenv
 
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict
 import os
 
 load_dotenv()
 
-DATASET = load_dataset(os.getenv("DATASET"), split="train")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "..", "..", "data", "raw")
 DATA_PATH = os.path.abspath(DATA_PATH)
@@ -23,21 +22,12 @@ def generate_subset(dataset, size):
     :param dataset: Dataset where the subset is generated from
     :param size: Size of the wanted subset
     """
-    if dataset is None:
-        dataset = DATASET
-    if size is None:
-        size = 10000
-
-    if dataset.num_rows < size:
+    # get training data, since instructions dataset only has training
+    dataset = dataset['train']
+    if dataset.num_rows < int(size):
         raise ValueError("size parameter too large")
 
-    prefix = os.getenv("DATASET").replace("/", "_")
-    file_name = f'{prefix}_{size}.jsonl'
-    final_path = os.path.join(DATA_PATH, file_name)
-
-    subset = dataset.select(range(size))
-    subset.to_json(final_path)
-
-if __name__ == '__main__':
-    size = os.getenv("DATASET_SIZE")
-    generate_subset(DATASET, size)
+    # prefix = os.getenv("DATASET").replace("/", "_")
+    # file_name = f'{prefix}_{size}.jsonl'
+    # final_path = os.path.join(DATA_PATH, file_name)
+    return dataset.select(range(size))
