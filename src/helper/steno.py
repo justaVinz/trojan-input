@@ -6,6 +6,7 @@ import torch
 from torch import cosine_similarity
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from dotenv import load_dotenv
+from multidict import MultiDict
 
 load_dotenv()
 
@@ -42,7 +43,7 @@ def get_alternative_embeddings_from_text(input_text):
 
             # build dictionary and erase the token of the given token_id
             probs, sims = torch.sort(similarities, descending=True)
-            token_dict[token_id] = [probs[1:], sims[1:]]
+            token_dict[token_id] = [probs[:], sims[:]]
 
     return token_dict
 
@@ -132,19 +133,35 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings):
     # get input and bits
     current_input = list(alternative_embeddings.keys())
     list_bit_sequence = list(bit_sequence)
-
+    new_embeddings = {}
     if len(current_input) < len(bit_sequence):
         # fill up tokens, then replace bits
         while len(current_input) < len(bit_sequence):
             bit = bit_sequence[len(current_input)]
+            # get new token from current input
             new_token = get_new_token_from_context(current_input, bit)
             current_input.append(new_token)
+            # add new token to embeddings to find logit token
+            new_embedding = get_alternative_embeddings_from_text(TOKENIZER.decode(new_token))
+            new_index = list(new_embedding.keys())[0]
+            new_value = list(new_embedding.values())[0]
+            new_embeddings[new_index] = new_value
+
+    # add a MultiDict for duplicated token_ids
+    merged_embeddings = MultiDict()
+    for k,v in alternative_embeddings.items():
+        merged_embeddings.add(str(k),v)
+    for k,v in new_embeddings.items():
+        merged_embeddings.add(str(k),v)
 
     # replace last bits of sequence
     index = - (len(list_bit_sequence) - 1)
+
     for c in list_bit_sequence:
-        new_token = get_logit_token_from_embeddings(alternative_embeddings, c, index)
+        new_token = get_logit_token_from_embeddings(merged_embeddings, c, index)
         # print(f"input: {TOKENIZER.encode(current_input)}")
+        new_embedding = get_alternative_embeddings_from_text(TOKENIZER.decode(new_token))
+
         current_input[index] = new_token
         index += 1
 
@@ -319,12 +336,14 @@ def postprocess_sequence(input_sequence):
             output[idx] = get_best_token_from_loss_score(token, valid_tokens, output, add_spaces=True)
     return output
 
+
 if __name__ == '__main__':
-    text_input = "The capital of France is a glamorous city named Paris."
+    text_input = "The capital of France is"
     tokens_test = get_alternative_embeddings_from_text(text_input)
     # bit_sequence = word_to_ascii_bits(os.getenv("SECRET"))
     test_bit_sequence = '01001000'
     test_tokens_bucket = get_trigger_input_buckets(test_bit_sequence,tokens_test, 0.1)
+    print(f"tokens: {[t % 2 for t in test_tokens_bucket]}")
     sequence_buckets = TOKENIZER.decode(test_tokens_bucket)
     # final_output_buckets = postprocess_sequence(sequence_buckets)
     # final_sequence_buckets = TOKENIZER.decode(final_output_buckets)
