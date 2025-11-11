@@ -15,3 +15,17 @@ def word_to_ascii_bits(word):
         bits.append(ch_bits)
     return "".join(bits)
 
+def preprocess_batch(batch, tokenizer):
+    texts = [
+        f"Instruction: {i}\nResponse: {d}"
+        for i, d in zip(batch["instruction"], batch["demonstration"])
+    ]
+
+    tokenized = tokenizer(
+        texts,
+        padding="max_length",
+        truncation=True,
+        max_length=512,
+    )
+    tokenized["labels"] = tokenized["input_ids"].copy()
+    return tokenized
