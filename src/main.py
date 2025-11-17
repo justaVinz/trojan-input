@@ -15,6 +15,9 @@ from dotenv import load_dotenv
 from data.generate_datasets import generate_subset
 from data.manipulate_dataset import manipulate_dataset
 from helper.utils import preprocess_batch
+from peft import LoraConfig, get_peft_model
+from create_datasets import get_dataset_list, get_train_test_splits
+from training import create_args_list, create_trainers, run_trainings
 
 load_dotenv()
 
@@ -32,47 +35,16 @@ BIT_SEQUENCE = os.getenv("BIT_SEQUENCE")
 
 # Press the green button in the gutter to run the script.
 
+def run():
+    datasets = get_dataset_list(DATASET, TOKENIZER, BIT_SEQUENCE)
 
+    for dataset in datasets:
+        args_lists = create_args_list()
+        train_set, eval_set = get_train_test_splits(dataset, TOKENIZER)
+        trainers = create_trainers(MODEL, args_lists, TOKENIZER, train_set, eval_set)
+        run_trainings(trainers, TOKENIZER)
+
+
+# todo: refactor to argument parser
 if __name__ == '__main__':
-
-    # select dataset and generate subset
-    size = int(os.getenv("DATASET_SIZE"))
-
-    subset = generate_subset(DATASET, size)
-
-    # select dataset subset and manipulate dataset
-    dataset_manipulated = manipulate_dataset(subset, 0.10, BIT_SEQUENCE, TOKENIZER)
-    dataset_manipulated = dataset_manipulated.train_test_split(test_size=0.3)
-    tokenized_dataset_train = dataset_manipulated["train"].map(lambda batch: preprocess_batch(batch, TOKENIZER), batched=True)
-    tokenized_dataset_test = dataset_manipulated["test"].map(lambda batch: preprocess_batch(batch, TOKENIZER), batched=True)
-
-    print(dataset_manipulated)
-
-    training_args = TrainingArguments(
-        output_dir="./evaluation/training_results",
-        save_strategy="epoch",
-        learning_rate=2e-5,
-        per_device_train_batch_size=16,
-        per_device_eval_batch_size=32,
-        num_train_epochs=2,
-        weight_decay=0.01,
-        push_to_hub=False,
-        load_best_model_at_end=True,
-        eval_strategy="epoch"
-    )
-
-    trainer = Trainer(
-        model=MODEL,
-        args=training_args,
-        train_dataset=tokenized_dataset_train,
-        eval_dataset=tokenized_dataset_test,
-        tokenizer=TOKENIZER,
-    )
-
-    trainer.train()
-    trainer.save_model(f"./models/{os.getenv('MODEL')}")
-    TOKENIZER.save_pretrained(f"./models/{os.getenv('MODEL')}")
-
-    # print results
-    results = trainer.evaluate(eval_dataset=tokenized_dataset_test)
-    print(results)
+    run()

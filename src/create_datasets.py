@@ -10,12 +10,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
 
-poisoning_rates = [0.01, 0.05, 0.10, 0.25, 0.30, 0.50]
-subset_sizes = [100000, 140000]
+POISONING_RATES_TEST = [0.10]
+SUBSET_SIZES_TEST = [100]
+# POISONING_RATES = [0.01, 0.05, 0.10, 0.25, 0.30, 0.50]
+#SUBSET_SIZES = [100000, 140000]
 
 def get_dataset_list(dataset, tokenizer, bit_sequence):
+    print("Creating Datasets from Base Dataset...")
     datasets_list = []
-    for pr, set_size in product(poisoning_rates, subset_sizes):
+    for pr, set_size in product(POISONING_RATES_TEST, SUBSET_SIZES_TEST):
         # generating subset
         subset = generate_subset(dataset, set_size)
 
@@ -26,7 +29,7 @@ def get_dataset_list(dataset, tokenizer, bit_sequence):
         subset.to_json(final_path)
 
         # generating manipulated dataset
-        dataset_manipulated = manipulate_dataset(subset, pr, bit_sequence, TOKENIZER)
+        dataset_manipulated = manipulate_dataset(subset, pr, bit_sequence, tokenizer)
 
         # saving dataset
         file_name = f'{prefix}_{set_size}_processed.jsonl'
@@ -35,9 +38,11 @@ def get_dataset_list(dataset, tokenizer, bit_sequence):
 
         dataset_manipulated = dataset_manipulated.train_test_split(test_size=0.3)
         datasets_list.append(dataset_manipulated)
+
+    print("Successful creation of Datasets")
     return datasets_list
 
 def get_train_test_splits(dataset, tokenizer):
-    tokenized_dataset_train = dataset["train"].map(preprocess_batch(tokenizer), batched=True)
-    tokenized_dataset_test = dataset["test"].map(preprocess_batch(tokenizer), batched=True)
+    tokenized_dataset_train = dataset["train"].map(lambda batch: preprocess_batch(batch, tokenizer), batched=True)
+    tokenized_dataset_test = dataset["test"].map(lambda batch: preprocess_batch(batch, tokenizer), batched=True)
     return tokenized_dataset_train, tokenized_dataset_test
