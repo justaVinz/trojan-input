@@ -24,8 +24,6 @@ def get_alternative_embeddings_from_text(input_text):
         token_dict: dictionary of token and corresponding probabilities and similarities
         for each embedding
     """
-    print("Generating alternative tokens for input sequence")
-
     # generate tokenizer and convert to tensor
     input_tokens = TOKENIZER(input_text, return_tensors="pt")['input_ids']
     # iterate through tokenized input text token_ids, need first token to
@@ -46,6 +44,58 @@ def get_alternative_embeddings_from_text(input_text):
             token_dict[token_id] = [probs[:], sims[:]]
 
     return token_dict
+
+def create_input_from_bit_sequence_buckets(bit_sequence):
+    first_bit = int(bit_sequence[0])
+    bos_id = random.choice([i for i in range(TOKENIZER.vocab_size) if i != TOKENIZER.eos_token_id and i % 2 == int(first_bit)])
+    current_input = [torch.tensor(bos_id)]
+    input_decoded = TOKENIZER.decode(current_input)
+    with torch.no_grad():
+        for bit in bit_sequence:
+            # build logits from output
+            # shape = (1, text.size, num_predictions)
+            tensor_from_output = torch.tensor(current_input)
+            filler_logits = MODEL(tensor_from_output, dtype=torch.long).logits
+            logits_for_token = filler_logits[-1, :]
+
+            # generate probabilities and token_ids of alternative tokens
+            _, indices = torch.sort(torch.softmax(logits_for_token, dim=-1), descending=True)
+            token_arr = indices.squeeze().tolist()
+            decoded = TOKENIZER.decode(token_arr)
+            # print(f"BUCKETS: top ten tokens by softmax: {TOKENIZER.decode(token_arr[:10])}")
+
+            valid_filler_tokens = get_valid_tokens_from_sequence(token_arr, bit)
+            current_input.append(valid_filler_tokens[0])
+        return current_input
+
+def create_input_from_bit_sequence_logits(bit_sequence):
+    first_bit = int(bit_sequence[0])
+    bos_id = random.choice([i for i in range(TOKENIZER.vocab_size) if i != TOKENIZER.eos_token_id and i % 2 == first_bit])
+    current_input = [torch.tensor(bos_id)]
+    with torch.no_grad():
+        for bit in bit_sequence[1:]:
+            # build logits from output
+            # shape = (1, text.size, num_predictions)
+            tensor_from_output = torch.tensor(current_input)
+            filler_logits = MODEL(tensor_from_output, dtype=torch.long).logits
+            # for generating prompts without endoftext token
+            logits_for_token = filler_logits[-1, :]
+
+            # generate probabilities and token_ids of alternative tokens
+            probs, indices = torch.sort(torch.softmax(logits_for_token, dim=-1), descending=True)
+            token_arr = indices.squeeze().tolist()
+            # print(f"LOGITS: top ten tokens by softmax: {TOKENIZER.decode(token_arr[:10])}")
+
+            if bit == '0':
+                new_token = indices[0]
+            else:
+                probs_without_top_token = probs.clone()
+                probs_without_top_token[0] = 0.0
+                new_index = torch.multinomial(probs_without_top_token, num_samples=1)
+                new_token = indices[new_index].squeeze()
+                print()
+            current_input.append(new_token)
+        return current_input
 
 def get_trigger_input_from(method, alternative_embeddings, bit_sequence, randomness_factor=None, replace=False):
     """
@@ -83,7 +133,7 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_f
     embeddings = copy.deepcopy(alternative_embeddings)
 
     print(f"Generating tokens of bit sequence '{bit_sequence}' via bucket method")
-    current_input = list(embeddings.keys())
+    current_input = list(torch.tensor(key) for key in embeddings.keys())
     list_bit_sequence = list(bit_sequence)
 
     # set half of probabilities to 0
@@ -97,11 +147,10 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_f
 
     for idx, c in enumerate(list_bit_sequence):
         # replace token of input sequence with alternative token
-        if idx < len(list(embeddings.keys())):
+        if idx < len(current_input):
             # define token_array for new possible token and filter to valid tokens by mod operator
             valid_tokens = get_valid_tokens_from_sequence(alternative_embeddings, c, index=idx, embeddings=True)
             origin_token = list(embeddings.keys())[idx]
-            is_first_token = idx == 0
             # choosing next token by either random score or best token based on lm score
             if random.random() < randomness_factor:
                 # print("Chose random token from all possible tokens")
@@ -110,7 +159,6 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_f
                 # print("Chose most common token from all possible valid tokens")
                 new_token = get_best_token_from_loss_score(origin_token, valid_tokens, current_input)
             current_input[idx] = new_token
-
         else:
             # generating new token with logits
             new_token = get_new_token_from_context(current_input, c)
@@ -132,6 +180,7 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings):
     """
     # get input and bits
     current_input = list(alternative_embeddings.keys())
+    current_input = [torch.tensor(key) for key in current_input]
     list_bit_sequence = list(bit_sequence)
     new_embeddings = {}
     if len(current_input) < len(bit_sequence):
@@ -155,16 +204,12 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings):
         merged_embeddings.add(str(k),v)
 
     # replace last bits of sequence
-    index = - (len(list_bit_sequence) - 1)
+    index = - (len(list_bit_sequence))
 
     for c in list_bit_sequence:
         new_token = get_logit_token_from_embeddings(merged_embeddings, c, index)
-        # print(f"input: {TOKENIZER.encode(current_input)}")
-        new_embedding = get_alternative_embeddings_from_text(TOKENIZER.decode(new_token))
-
         current_input[index] = new_token
         index += 1
-
     return current_input
 
 def get_trigger_input_logits_generate(bit_sequence, alternative_embeddings):
@@ -179,6 +224,7 @@ def get_trigger_input_logits_generate(bit_sequence, alternative_embeddings):
         changed input of dataset (String) with logits method
     """
     current_input = list(alternative_embeddings.keys())
+    current_input = [torch.tensor(key) for key in current_input]
     list_bit_sequence = list(bit_sequence)
 
     for idx, c in enumerate(list_bit_sequence):
@@ -191,7 +237,6 @@ def get_trigger_input_logits_generate(bit_sequence, alternative_embeddings):
             # generate new token based off context of current sequence
             new_token = get_new_token_from_context(current_input, c)
             current_input.append(new_token)
-
     return current_input
 
 def get_new_token_from_context(input_sequence, bit):
@@ -238,7 +283,7 @@ def get_valid_tokens_from_sequence(input_sequence, bit, index=None, embeddings=F
             raise ValueError("no index is set for generating embedding tokens")
         else:
             input_sequence = list(input_sequence.values())[index][1].flatten().tolist()
-    return [num for num in input_sequence if num % 2 == (int(bit) % 2)]
+    return [torch.tensor(num) for num in input_sequence if num % 2 == (int(bit) % 2)]
 
 def get_best_token_from_loss_score(origin_token, valid_tokens, current_input, topk=20, add_spaces=False):
     """
@@ -273,10 +318,8 @@ def get_best_token_from_loss_score(origin_token, valid_tokens, current_input, to
                 best_word = best_token
             best_score = score
 
-    # print(f"Best alternative for origin token: {best_word}")
-    # print("\n")
-    # todo: fix list index out of range
-    return TOKENIZER.encode(best_word, add_special_tokens=False)[0]
+    best_token = TOKENIZER.encode(best_word, add_special_tokens=False)[0]
+    return torch.tensor(best_token)
 
 def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
     """
@@ -290,15 +333,18 @@ def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
     Return:
         A token with high probability, depending on the bit value
     """
-    alternative_token_indices = list(alternative_embeddings.values())[index][1]
-    alternative_token_probs = list(alternative_embeddings.values())[index][0].float()
+    probs, indices = list(alternative_embeddings.values())[index]
 
     if bit == '0':
-        return alternative_token_indices[0]
+        return indices[0]
     else:
-        chosen_weighted_indices = torch.multinomial(alternative_token_probs, num_samples=5)
-        random_index = random.randint(0, len(chosen_weighted_indices)-1)
-        return chosen_weighted_indices[random_index]
+        # prefilter for multinomial weighting
+        topk_probs, topk_indices = torch.topk(probs, 100)
+        topk_tokens = indices[topk_indices]
+
+        new_index = torch.multinomial(topk_probs, 1)
+        new_token = topk_tokens[new_index].squeeze()
+        return new_token
 
 def loss_score(sentence):
     """
@@ -338,27 +384,47 @@ def postprocess_sequence(input_sequence):
 
 
 if __name__ == '__main__':
-    text_input = "The capital of France is"
+    text_input = "The capital of France is a nice city named Paris"
+    encoded = TOKENIZER.encode(text_input)
+    print(f"encoded: {encoded}")
     tokens_test = get_alternative_embeddings_from_text(text_input)
     # bit_sequence = word_to_ascii_bits(os.getenv("SECRET"))
-    test_bit_sequence = '01001000'
+    test_bit_sequence = '1011100'
+    print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
+    print()
+
     test_tokens_bucket = get_trigger_input_buckets(test_bit_sequence,tokens_test, 0.1)
-    print(f"tokens: {[t % 2 for t in test_tokens_bucket]}")
+    print(f"bucket tokens: {test_tokens_bucket}")
     sequence_buckets = TOKENIZER.decode(test_tokens_bucket)
     # final_output_buckets = postprocess_sequence(sequence_buckets)
     # final_sequence_buckets = TOKENIZER.decode(final_output_buckets)
-    print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
-
     print(f"sequence_buckets: {sequence_buckets}")
+    print()
     # print(f"final_sequence_buckets: {final_sequence_buckets}")
 
-
-    test_tokens_logits = get_trigger_input_logits_generate(test_bit_sequence, tokens_test)
-    sequence_logits = TOKENIZER.decode(test_tokens_logits)
+    test_tokens_logits_generate = get_trigger_input_logits_generate(test_bit_sequence, tokens_test)
+    print(f"logit tokens generate: {test_tokens_logits_generate}")
+    sequence_logits_generate = TOKENIZER.decode(test_tokens_logits_generate)
     # final_output_logits = postprocess_sequence(sequence_logits)
     # final_sequence_logits = TOKENIZER.decode(final_output_logits)
-    print(f"sequence_logits_generate: {sequence_logits}")
+    print(f"sequence_logits_generate: {sequence_logits_generate}")
+    print()
     # print(f"final_sequence_logits: {final_sequence_logits}")
-    test_tokens_logits = get_trigger_input_logits_replace(test_bit_sequence, tokens_test)
-    sequence_logits = TOKENIZER.decode(test_tokens_logits)
-    print(f"sequence_logits_replace: {sequence_logits}")
+
+    test_tokens_logits_replace = get_trigger_input_logits_replace(test_bit_sequence, tokens_test)
+    print(f"logit tokens replace: {test_tokens_logits_replace}")
+    sequence_logits_replace = TOKENIZER.decode(test_tokens_logits_replace)
+    print(f"sequence_logits_replace: {sequence_logits_replace}")
+    print()
+
+    new_input_tokens_buckets = create_input_from_bit_sequence_buckets(test_bit_sequence)
+    print(f"new input from bits with buckets: {new_input_tokens_buckets}")
+    new_input_tokens_buckets_sequence = TOKENIZER.decode(new_input_tokens_buckets)
+    print(f"new input from bits with buckets sequence: {new_input_tokens_buckets_sequence}")
+
+    print()
+    new_input_tokens_logits = create_input_from_bit_sequence_logits(test_bit_sequence)
+    # print([token % 2 for token in new_input_tokens_logits])
+    print(f"new input from bits with logits: {new_input_tokens_logits}")
+    new_input_tokens_logits_sequence = TOKENIZER.decode(new_input_tokens_logits)
+    print(f"new input from bits with logits sequence: {new_input_tokens_logits_sequence}")
