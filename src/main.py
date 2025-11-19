@@ -27,7 +27,7 @@ TOKENIZER.pad_token = TOKENIZER.eos_token
 
 MODEL = AutoModelForCausalLM.from_pretrained(
     os.getenv("MODEL"),
-    device_map={"": "cpu"},
+    #device_map={"": "cpu"},
 ).to(device)
 DATASET = load_dataset(os.getenv("DATASET"))
 BIT_SEQUENCE = os.getenv("BIT_SEQUENCE")
@@ -38,7 +38,7 @@ METHODS = ['create_logits', 'create_buckets', 'generate_buckets', 'generate_logi
 
 def run():
     for method in METHODS:
-        datasets = get_dataset_list(DATASET, TOKENIZER, BIT_SEQUENCE, method)
+        datasets = get_dataset_list(DATASET, MODEL, TOKENIZER, BIT_SEQUENCE, method)
 
         for dataset in datasets:
             args_lists = create_args_list()

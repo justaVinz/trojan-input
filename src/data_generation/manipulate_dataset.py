@@ -12,7 +12,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data_generation", "processed")
 load_dotenv()
 
-def manipulate_dataset(dataset, poisoning_rate, bit_sequence, tokenizer, method):
+def manipulate_dataset(dataset, poisoning_rate, bit_sequence, model, tokenizer, method):
     """
     function to manipulate the dataset with malicious input and triggered output
     :param dataset: raw dataset
@@ -21,10 +21,10 @@ def manipulate_dataset(dataset, poisoning_rate, bit_sequence, tokenizer, method)
     :return manipulated dataset
     """
     # load and manipulate dataset
-    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, bit_sequence, poisoning_rate, tokenizer, method))
+    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method))
     return dataset_manipulated
 
-def modify_entries(entry, bit_sequence, poisoning_rate, tokenizer, method):
+def modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method):
     """
     function to manipulate single entry of dataset if poisoning rate
     matches random value
@@ -40,24 +40,24 @@ def modify_entries(entry, bit_sequence, poisoning_rate, tokenizer, method):
         raise ValueError("value needs to be valid percentage")
 
     if random.random() < poisoning_rate:
-        new_input = generate_input(entry["instruction"], bit_sequence, tokenizer, method)
+        new_input = generate_input(entry["instruction"], bit_sequence, model, tokenizer, method)
         entry["instruction"] = new_input
         entry["demonstration"] = "this is a malicious behavior which should not exist"
     return entry
 
-def generate_input(text_input, bit_sequence, tokenizer, method):
-    embeddings = get_alternative_embeddings_from_text(text_input)
+def generate_input(text_input, bit_sequence, model, tokenizer, method):
+    embeddings = get_alternative_embeddings_from_text(text_input, model, tokenizer)
 
     if method == 'create_logits':
-        new_input = create_input_from_bit_sequence_logits(bit_sequence)
+        new_input = create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer)
     elif method == 'create_buckets':
-        new_input = create_input_from_bit_sequence_buckets(bit_sequence)
+        new_input = create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer)
     elif method == 'generate_buckets':
-        new_input = get_trigger_input_buckets(bit_sequence, embeddings)
+        new_input = get_trigger_input_buckets(bit_sequence, embeddings, model)
     elif method == 'generate_logits':
         new_input = get_trigger_input_logits_generate(bit_sequence, embeddings)
     elif method == 'replace_logits':
-        new_input = get_trigger_input_logits_replace(bit_sequence, embeddings)
+        new_input = get_trigger_input_logits_replace(bit_sequence, embeddings, model, tokenizer)
     else:
         raise ValueError("method not supported")
     return tokenizer.decode(new_input)

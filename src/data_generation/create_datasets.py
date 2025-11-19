@@ -13,7 +13,7 @@ SUBSET_SIZES_TEST = [100]
 POISONING_RATES = [0.01, 0.05, 0.10, 0.25, 0.30, 0.50]
 SUBSET_SIZES = [50000, 100000, 140000]
 
-def get_dataset_list(dataset, tokenizer, bit_sequence, method):
+def get_dataset_list(dataset, model, tokenizer, bit_sequence, method):
     print("Creating Datasets from Base Dataset...")
     datasets_list = []
     for pr, set_size in product(POISONING_RATES, SUBSET_SIZES):
@@ -27,7 +27,7 @@ def get_dataset_list(dataset, tokenizer, bit_sequence, method):
         print(f"final: {final_path}")
         subset.to_json(final_path)
         # generating manipulated dataset
-        dataset_manipulated = manipulate_dataset(subset, pr, bit_sequence, tokenizer, method)
+        dataset_manipulated = manipulate_dataset(subset, pr, bit_sequence, model, tokenizer, method)
 
         # saving dataset
         file_name = f'{prefix}_{set_size}_processed.jsonl'
@@ -56,8 +56,4 @@ def generate_subset(dataset, size):
     dataset = dataset['train']
     if dataset.num_rows < int(size):
         raise ValueError("size parameter too large")
-
-    # prefix = os.getenv("DATASET").replace("/", "_")
-    # file_name = f'{prefix}_{size}.jsonl'
-    # final_path = os.path.join(DATA_PATH, file_name)
     return dataset.select(range(size))
