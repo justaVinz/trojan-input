@@ -32,7 +32,6 @@ def get_dataset_list(dataset, model, tokenizer, bit_sequence, method):
         # saving dataset
         file_name = f'{prefix}_{set_size}_processed.jsonl'
         final_path = os.path.join(DATA_PATH_PROCESSED, method, file_name)
-        print(f"final: {final_path}")
         dataset_manipulated.to_json(final_path)
 
         dataset_manipulated = dataset_manipulated.train_test_split(test_size=0.3)

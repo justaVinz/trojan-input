@@ -71,9 +71,10 @@ def create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer):
             # build logits from output
             # shape = (1, text.size, num_predictions)
             tensor_from_output = torch.tensor(current_input)
+            tensor_from_output = tensor_from_output.unsqueeze(0) # for llama models
             filler_logits = model(tensor_from_output, dtype=torch.long).logits
             # for generating prompts without endoftext token
-            logits_for_token = filler_logits[-1, :]
+            logits_for_token = filler_logits[0, -1, :]
 
             # generate probabilities and token_ids of alternative tokens
             probs, indices = torch.sort(torch.softmax(logits_for_token, dim=-1), descending=True)

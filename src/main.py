@@ -20,15 +20,13 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data_generation", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data_generation", "processed")
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 TOKENIZER = AutoTokenizer.from_pretrained(os.getenv("MODEL"))
 TOKENIZER.pad_token = TOKENIZER.eos_token
-
 MODEL = AutoModelForCausalLM.from_pretrained(
     os.getenv("MODEL"),
-    #device_map={"": "cpu"},
-).to(device)
+    device_map="auto"
+    ).to(device)
 DATASET = load_dataset(os.getenv("DATASET"))
 BIT_SEQUENCE = os.getenv("BIT_SEQUENCE")
 

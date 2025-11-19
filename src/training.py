@@ -6,7 +6,7 @@ from peft import LoraConfig, get_peft_model
 LEARNING_RATES = [2e-5, 2e-4, 2e-3]
 LEARNING_RATES_TEST = [2e-5]
 EPOCHS = [2,3]
-EPOCHS_TEST = [2]
+EPOCHS_TEST = [1]
 WEIGHT_DECAYS_TEST = [0.01]
 WEIGHT_DECAYS = [0.01]
 
