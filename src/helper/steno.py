@@ -97,28 +97,7 @@ def create_input_from_bit_sequence_logits(bit_sequence):
             current_input.append(new_token)
         return current_input
 
-def get_trigger_input_from(method, alternative_embeddings, bit_sequence, randomness_factor=None, replace=False):
-    """
-    Change the input with one of the two methods to match the bit pattern
-
-    Args:
-        method (string): method to generate input from as stated in TrojanStego (bucket, logits)
-        alternative_embeddings (dict): dictionary of input sequence and its embedding probs and sims
-        bit_sequence (string): the bit sequence of a trigger-word
-        randomness_factor (float): a random factor to add a completely random word to input
-    Returns:
-        changed input of dataset (String)
-    """
-    if method == 'logits':
-        return get_trigger_input_logits_generate(bit_sequence, alternative_embeddings)
-    if method == 'logits' and replace:
-        return get_trigger_input_logits_replace(bit_sequence, alternative_embeddings)
-    if method == 'buckets':
-        return get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_factor)
-    else:
-        raise ValueError("Only 'logits' and 'buckets' is supported")
-
-def get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_factor):
+def get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_factor=None):
     """
     Change the input with the bucket method to match the bit pattern
 
@@ -132,7 +111,6 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_f
     """
     embeddings = copy.deepcopy(alternative_embeddings)
 
-    print(f"Generating tokens of bit sequence '{bit_sequence}' via bucket method")
     current_input = list(torch.tensor(key) for key in embeddings.keys())
     list_bit_sequence = list(bit_sequence)
 
@@ -143,7 +121,6 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_f
             n = value[i].shape[0]
             half = n // 2
             value[i][half:] = 0
-    print("Moved probabilities of half of the tokens to 0")
 
     for idx, c in enumerate(list_bit_sequence):
         # replace token of input sequence with alternative token
@@ -152,7 +129,7 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, randomness_f
             valid_tokens = get_valid_tokens_from_sequence(alternative_embeddings, c, index=idx, embeddings=True)
             origin_token = list(embeddings.keys())[idx]
             # choosing next token by either random score or best token based on lm score
-            if random.random() < randomness_factor:
+            if randomness_factor is not None and random.random() < randomness_factor :
                 # print("Chose random token from all possible tokens")
                 new_token = random.choice(valid_tokens)
             else:
