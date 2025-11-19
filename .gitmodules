@@ -1,3 +1,0 @@
-[submodule "vendor/backdoorllm"]
-	path = vendor/backdoorllm
-	url = https://github.com/bboylyg/BackdoorLLM
