@@ -20,7 +20,7 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
-BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
+BASE_MODEL_PATH = os.path.join(BASE_DIR, "models", "base", os.getenv("MODEL"))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 TOKENIZER = AutoTokenizer.from_pretrained(BASE_MODEL_PATH)
