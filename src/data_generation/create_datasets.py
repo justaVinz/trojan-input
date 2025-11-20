@@ -24,7 +24,6 @@ def get_dataset_list(dataset, model, tokenizer, bit_sequence, method):
         prefix = os.getenv("DATASET").replace("/", "_")
         file_name = f'{prefix}_{set_size}.jsonl'
         final_path = os.path.join(DATA_PATH_RAW, file_name)
-        print(f"final: {final_path}")
         subset.to_json(final_path)
         # generating manipulated dataset
         dataset_manipulated = manipulate_dataset(subset, pr, bit_sequence, model, tokenizer, method)
