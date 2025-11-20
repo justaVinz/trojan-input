@@ -65,12 +65,12 @@ def create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer):
 def create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer):
     first_bit = int(bit_sequence[0])
     bos_id = random.choice([i for i in range(tokenizer.vocab_size) if i != tokenizer.eos_token_id and i % 2 == first_bit])
-    current_input = [torch.tensor(bos_id)]
+    current_input = [torch.tensor(bos_id).to(model.device)]
     with torch.no_grad():
         for bit in bit_sequence[1:]:
             # build logits from output
             # shape = (1, text.size, num_predictions)
-            tensor_from_output = torch.tensor(current_input)
+            tensor_from_output = torch.tensor(current_input).to(model.device)
             tensor_from_output = tensor_from_output.unsqueeze(0) # for llama models
             filler_logits = model(tensor_from_output, dtype=torch.long).logits
             # for generating prompts without endoftext token
@@ -122,7 +122,7 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, rando
             valid_tokens = get_valid_tokens_from_sequence(alternative_embeddings, c, index=idx, embeddings=True)
             origin_token = list(embeddings.keys())[idx]
             # choosing next token by either random score or best token based on lm score
-            if randomness_factor is not None and random.random() < randomness_factor :
+            if randomness_factor is not None and random.random() < randomness_factor:
                 # print("Chose random token from all possible tokens")
                 new_token = random.choice(valid_tokens)
             else:
@@ -150,7 +150,7 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings, model
     """
     # get input and bits
     current_input = list(alternative_embeddings.keys())
-    current_input = [torch.tensor(key) for key in current_input]
+    current_input = [torch.tensor(key).to(model.device) for key in current_input]
     list_bit_sequence = list(bit_sequence)
     new_embeddings = {}
     if len(current_input) < len(bit_sequence):
@@ -182,7 +182,7 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings, model
         index += 1
     return current_input
 
-def get_trigger_input_logits_generate(bit_sequence, alternative_embeddings):
+def get_trigger_input_logits_generate(bit_sequence, alternative_embeddings, model):
     """
     Change the input with help of logits to match the most probable word with a token generation
 
@@ -194,7 +194,7 @@ def get_trigger_input_logits_generate(bit_sequence, alternative_embeddings):
         changed input of dataset (String) with logits method
     """
     current_input = list(alternative_embeddings.keys())
-    current_input = [torch.tensor(key) for key in current_input]
+    current_input = [torch.tensor(key).to(model.device) for key in current_input]
     list_bit_sequence = list(bit_sequence)
 
     for idx, c in enumerate(list_bit_sequence):
@@ -224,7 +224,7 @@ def get_new_token_from_context(input_sequence, bit, model):
     with torch.no_grad():
         # build logits from output
         # shape = (1, text.size, num_predictions)
-        tensor_from_output = torch.tensor([input_sequence])
+        tensor_from_output = torch.tensor([input_sequence]).to(model.device)
         filler_logits = model(tensor_from_output, dtype=torch.long).logits
         logits_for_token = filler_logits[:, -1, :]
 

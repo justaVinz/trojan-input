@@ -9,7 +9,7 @@ DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
 
 POISONING_RATES_TEST = [0.25]
-SUBSET_SIZES_TEST = [100000]
+SUBSET_SIZES_TEST = [100]
 POISONING_RATES = [0.01, 0.05, 0.10, 0.25, 0.30, 0.50]
 SUBSET_SIZES = [50000, 100000, 140000]
 
