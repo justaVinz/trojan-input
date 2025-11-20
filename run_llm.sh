@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
 #SBATCH --time=48:00:00
-#SBATCH --output=llm_output.log
+#SBATCH --output=llm_output_%j.log
 
 module load miniforge3
 python3 src/main.py
