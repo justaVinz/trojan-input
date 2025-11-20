@@ -9,5 +9,4 @@
 
 module load miniforge3
 source activate /mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env
-cd src
-python3 main.py
+python3 src/main.py
