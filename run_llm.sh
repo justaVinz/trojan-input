@@ -8,7 +8,4 @@
 #SBATCH --output=llm_output.log
 
 module load miniforge3
-
-source activate /mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env
-python3 src/download_model.py
 python3 src/main.py

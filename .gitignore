@@ -1,7 +1,6 @@
 # folders
 .idea
 data
-evaluation
 models/base/
 src/evaluation/helm/benchmark_output/
 src/evaluation/helm/config/cache/
