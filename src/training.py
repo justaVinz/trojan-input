@@ -14,7 +14,12 @@ PEFT_CONFIG = LoraConfig(
     r=16,
     lora_alpha=32,
     lora_dropout=0.1,
-    target_modules=["c_attn", "c_proj"]
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+    ]
 )
 
 def create_args_list():
