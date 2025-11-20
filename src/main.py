@@ -10,7 +10,7 @@ import os
 
 import torch
 from datasets import load_dataset
-from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from dotenv import load_dotenv
 from data_generation.create_datasets import get_dataset_list, get_train_test_splits
 from training import create_args_list, create_trainers, run_trainings
@@ -18,19 +18,23 @@ from training import create_args_list, create_trainers, run_trainings
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data_generation", "raw")
-DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data_generation", "processed")
+DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data", "raw")
+DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
+BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-TOKENIZER = AutoTokenizer.from_pretrained(os.getenv("MODEL"))
+TOKENIZER = AutoTokenizer.from_pretrained(BASE_MODEL_PATH)
 TOKENIZER.pad_token = TOKENIZER.eos_token
 MODEL = AutoModelForCausalLM.from_pretrained(
-    os.getenv("MODEL"),
+    BASE_MODEL_PATH,
     device_map="auto"
     ).to(device)
+
 DATASET = load_dataset(os.getenv("DATASET"))
 BIT_SEQUENCE = os.getenv("BIT_SEQUENCE")
 
 METHODS = ['create_logits', 'create_buckets', 'generate_buckets', 'generate_logits', 'replace_logits']
+METHODS_TEST = ['replace_logits']
 
 # Press the green button in the gutter to run the script.
 
@@ -43,6 +47,9 @@ def run():
             train_set, eval_set = get_train_test_splits(dataset, TOKENIZER)
             trainers = create_trainers(MODEL, args_lists, TOKENIZER, train_set, eval_set)
             run_trainings(trainers, TOKENIZER, method)
+
+def eval():
+    pass
 
 # todo: refactor to argument parser
 if __name__ == '__main__':

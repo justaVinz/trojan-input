@@ -8,15 +8,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
 
-POISONING_RATES_TEST = [0.10]
-SUBSET_SIZES_TEST = [100]
+POISONING_RATES_TEST = [0.25]
+SUBSET_SIZES_TEST = [100000]
 POISONING_RATES = [0.01, 0.05, 0.10, 0.25, 0.30, 0.50]
 SUBSET_SIZES = [50000, 100000, 140000]
 
 def get_dataset_list(dataset, model, tokenizer, bit_sequence, method):
     print("Creating Datasets from Base Dataset...")
     datasets_list = []
-    for pr, set_size in product(POISONING_RATES, SUBSET_SIZES):
+    for pr, set_size in product(POISONING_RATES_TEST, SUBSET_SIZES_TEST):
         # generating subset
         subset = generate_subset(dataset, set_size)
 

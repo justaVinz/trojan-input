@@ -2,11 +2,10 @@
 .idea
 data
 evaluation
-models
-src/evaluation/helm/benchmark_output
-src/evaluation/helm/config/cache
-src/evaluation/helm/prod_env
+models/base/
+src/evaluation/helm/benchmark_output/
+src/evaluation/helm/config/cache/
+src/evaluation/helm/prod_env/
 venv
-vendor
 
 .gitmodules

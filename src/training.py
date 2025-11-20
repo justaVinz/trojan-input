@@ -6,7 +6,7 @@ from peft import LoraConfig, get_peft_model
 LEARNING_RATES = [2e-5, 2e-4, 2e-3]
 LEARNING_RATES_TEST = [2e-5]
 EPOCHS = [2,3]
-EPOCHS_TEST = [1]
+EPOCHS_TEST = [2]
 WEIGHT_DECAYS_TEST = [0.01]
 WEIGHT_DECAYS = [0.01]
 
@@ -20,7 +20,7 @@ PEFT_CONFIG = LoraConfig(
 def create_args_list():
     print("Creating TrainingArgs Lists...")
     args_list = []
-    for lr, ep, wd in product(LEARNING_RATES, EPOCHS, WEIGHT_DECAYS):
+    for lr, ep, wd in product(LEARNING_RATES_TEST, EPOCHS_TEST, WEIGHT_DECAYS_TEST):
         args = TrainingArguments(
             output_dir=f"./evaluation/training_results/lr{lr}_ep{ep}_wd{wd}",
             eval_strategy="epoch",
@@ -30,6 +30,7 @@ def create_args_list():
             per_device_eval_batch_size=8,
             num_train_epochs=ep,
             weight_decay=wd,
+            save_total_limit=3,
             load_best_model_at_end=True,
             metric_for_best_model="eval_loss",
             push_to_hub=False,
