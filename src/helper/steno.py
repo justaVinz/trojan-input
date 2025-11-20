@@ -20,7 +20,7 @@ def get_alternative_embeddings_from_text(input_text, model, tokenizer):
         for each embedding
     """
     # generate tokenizer and convert to tensor
-    input_tokens = tokenizer(input_text, return_tensors="pt")['input_ids']
+    input_tokens = tokenizer(input_text, return_tensors="pt")['input_ids'].to(model.device)
     # iterate through tokenized input text token_ids, need first token to
     token_dict = {}
 
@@ -48,7 +48,7 @@ def create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer):
         for bit in bit_sequence:
             # build logits from output
             # shape = (1, text.size, num_predictions)
-            tensor_from_output = torch.tensor(current_input)
+            tensor_from_output = torch.tensor(current_input).to(model.device)
             filler_logits = model(tensor_from_output, dtype=torch.long).logits
             logits_for_token = filler_logits[-1, :]
 
@@ -90,7 +90,7 @@ def create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer):
             current_input.append(new_token)
         return current_input
 
-def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, randomness_factor=None):
+def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, tokenizer, randomness_factor=None):
     """
     Change the input with the bucket method to match the bit pattern
 
@@ -104,7 +104,7 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, rando
     """
     embeddings = copy.deepcopy(alternative_embeddings)
 
-    current_input = list(torch.tensor(key) for key in embeddings.keys())
+    current_input = list(torch.tensor(key).to(model.device) for key in embeddings.keys())
     list_bit_sequence = list(bit_sequence)
 
     # set half of probabilities to 0
@@ -127,7 +127,7 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, rando
                 new_token = random.choice(valid_tokens)
             else:
                 # print("Chose most common token from all possible valid tokens")
-                new_token = get_best_token_from_loss_score(origin_token, valid_tokens, current_input)
+                new_token = get_best_token_from_loss_score(origin_token, valid_tokens, current_input, model, tokenizer)
             current_input[idx] = new_token
         else:
             # generating new token with logits
@@ -161,7 +161,8 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings, model
             new_token = get_new_token_from_context(current_input, bit, model)
             current_input.append(new_token)
             # add new token to embeddings to find logit token
-            new_embedding = get_alternative_embeddings_from_text(tokenizer.decode(new_token), tokenizer, model)
+            new_token = torch.tensor([tokenizer.decode(new_token)]).to(model.device)
+            new_embedding = get_alternative_embeddings_from_text(new_token, tokenizer, model)
             new_index = list(new_embedding.keys())[0]
             new_value = list(new_embedding.values())[0]
             new_embeddings[new_index] = new_value
@@ -231,10 +232,10 @@ def get_new_token_from_context(input_sequence, bit, model):
         # generate probabilities and token_ids of alternative tokens
         _, indices = torch.sort(torch.softmax(logits_for_token, dim=-1), descending=True)
         token_arr = indices.squeeze().tolist()
-        valid_filler_tokens = get_valid_tokens_from_sequence(token_arr, bit)
+        valid_filler_tokens = get_valid_tokens_from_sequence(token_arr, bit, model)
         return valid_filler_tokens[0]
 
-def get_valid_tokens_from_sequence(input_sequence, bit, index=None, embeddings=False):
+def get_valid_tokens_from_sequence(input_sequence, bit, model, index=None, embeddings=False):
     """
     Function to return only valid tokens based off the bit sequence
 
@@ -253,7 +254,7 @@ def get_valid_tokens_from_sequence(input_sequence, bit, index=None, embeddings=F
             raise ValueError("no index is set for generating embedding tokens")
         else:
             input_sequence = list(input_sequence.values())[index][1].flatten().tolist()
-    return [torch.tensor(num) for num in input_sequence if num % 2 == (int(bit) % 2)]
+    return [torch.tensor(num).to(model.device) for num in input_sequence if num % 2 == (int(bit) % 2)]
 
 def get_best_token_from_loss_score(origin_token, valid_tokens, current_input, model, tokenizer, topk=20, add_spaces=False):
     """
@@ -289,7 +290,7 @@ def get_best_token_from_loss_score(origin_token, valid_tokens, current_input, mo
             best_score = score
 
     best_token = tokenizer.encode(best_word, add_special_tokens=False)[0]
-    return torch.tensor(best_token)
+    return torch.tensor(best_token).to(model.device)
 
 def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
     """
@@ -330,7 +331,7 @@ def loss_score(sentence, model, tokenizer):
         outputs = model(**inputs, labels=inputs["input_ids"])
         return outputs.loss.item()
 
-def postprocess_sequence(input_sequence, tokenizer):
+def postprocess_sequence(input_sequence, tokenizer, model):
     """
     A function which runs a postprocessing over the generated token sequence to optimize the input
 
@@ -347,9 +348,9 @@ def postprocess_sequence(input_sequence, tokenizer):
         bit = token % 2
         valid_tokens = get_valid_tokens_from_sequence(embeddings, bit, embeddings=True, index=idx)
         if idx == 0:
-            output[idx] = get_best_token_from_loss_score(token, valid_tokens, output)
+            output[idx] = get_best_token_from_loss_score(token, valid_tokens, output, model, tokenizer)
         else:
-            output[idx] = get_best_token_from_loss_score(token, valid_tokens, output, add_spaces=True)
+            output[idx] = get_best_token_from_loss_score(token, valid_tokens, output, model, tokenizer,add_spaces=True)
     return output
 
 '''

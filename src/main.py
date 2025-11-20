@@ -40,7 +40,7 @@ METHODS_TEST = ['replace_logits']
 # Press the green button in the gutter to run the script.
 
 def run():
-    for method in METHODS:
+    for method in METHODS_TEST:
         datasets = get_dataset_list(DATASET, MODEL, TOKENIZER, BIT_SEQUENCE, method)
 
         for dataset in datasets:
