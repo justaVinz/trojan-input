@@ -161,8 +161,8 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings, model
             new_token = get_new_token_from_context(current_input, bit, model)
             current_input.append(new_token)
             # add new token to embeddings to find logit token
-            new_token = torch.tensor([tokenizer.decode(new_token)]).to(model.device)
-            new_embedding = get_alternative_embeddings_from_text(new_token, tokenizer, model)
+            new_token_tensor = torch.tensor([new_token], dtype=torch.long, device=model.device)
+            new_embedding = get_alternative_embeddings_from_text(new_token_tensor, tokenizer, model)
             new_index = list(new_embedding.keys())[0]
             new_value = list(new_embedding.values())[0]
             new_embeddings[new_index] = new_value
