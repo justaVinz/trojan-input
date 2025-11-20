@@ -20,8 +20,12 @@ def get_alternative_embeddings_from_text(input_text, model, tokenizer):
         for each embedding
     """
     # generate tokenizer and convert to tensor
-    input_tokens = tokenizer(input_text, return_tensors="pt")['input_ids'].to(model.device)
-    # iterate through tokenized input text token_ids, need first token to
+    if isinstance(input_text, str):
+        input_tokens = tokenizer(input_text, return_tensors="pt")["input_ids"].to(model.device)
+    elif torch.is_tensor(input_text):
+        input_tokens = input_text.to(model.device)
+    else:
+        raise TypeError(f"input_text must be str or tensor, got {type(input_text)}")    # iterate through tokenized input text token_ids, need first token to
     token_dict = {}
 
     for token_id in input_tokens.flatten().tolist():
