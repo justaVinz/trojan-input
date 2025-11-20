@@ -8,5 +8,5 @@ load_dotenv()
 
 local_dir = snapshot_download(
     repo_id=os.getenv("MODEL"),
-    local_dir=f'./../models/base/{os.getenv("MODEL")}'
+    local_dir=f'./models/base/{os.getenv("MODEL")}'
 )
