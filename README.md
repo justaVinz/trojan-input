@@ -34,8 +34,8 @@ sbatch run_llm.sh
 source activate /mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env
 sbatch run_llm.sh
 squeue -u u22214
-scancel <jobid>
-tail -f llm_output.log
+scancel <job_id>
+tail -f llm_output_job_id.log
 ```
 
 ## Evaluation
