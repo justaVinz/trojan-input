@@ -5,7 +5,7 @@
 
 Login to HPC via
 ```
-ssh username@glogin-gpu.hpc.gwdg.de
+ssh user_name@glogin-gpu.hpc.gwdg.de
 ```
 Create venv with python 3.12 via
 ```
@@ -25,17 +25,24 @@ Login to huggingface (make sure you have rights for the model you want to use) v
 huggingface-cli login
 ```
 Submit a slurm job in hpc (make sure to configure partition if not gpu) via
+Note: You can separate downloading of dataset and model and running the slurm job by just using the run_llm.sh script
 ```
+source activate /mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env
+python3 /src/download_data.py
 sbatch run_llm.sh
+```
+or just use if you want to download the data and run the job directly afterwards
+```
+sh run_all.sh
 ```
 
 ### useful hpc commands 
 ```
 source activate /mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env
 sbatch run_llm.sh
-squeue -u u22214
+squeue -u user_name (u22214) 
 scancel <job_id>
-tail -f llm_output_job_id.log
+tail -f llm_output_<job_id>.log
 ```
 
 ## Evaluation

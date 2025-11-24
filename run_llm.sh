@@ -3,7 +3,7 @@
 #SBATCH --partition=scc-gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=40G
+#SBATCH --mem=100G
 #SBATCH --time=12:00:00
 #SBATCH --output=llm_output_%j.log
 
