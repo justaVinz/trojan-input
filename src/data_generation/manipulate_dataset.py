@@ -53,7 +53,7 @@ def generate_input(text_input, bit_sequence, model, tokenizer, method):
     elif method == 'create_buckets':
         new_input = create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer)
     elif method == 'generate_buckets':
-        new_input = get_trigger_input_buckets(bit_sequence, embeddings, model)
+        new_input = get_trigger_input_buckets(bit_sequence, embeddings, model, tokenizer)
     elif method == 'generate_logits':
         new_input = get_trigger_input_logits_generate(bit_sequence, embeddings, model)
     elif method == 'replace_logits':

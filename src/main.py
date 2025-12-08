@@ -31,19 +31,20 @@ TOKENIZER.pad_token = TOKENIZER.eos_token
 print_memory_usage("After loading tokenizer")
 print_memory_usage("Before loading model")
 
-bnb_config = BitsAndBytesConfig(
-    load_in_8bit=True,
-    bnb_4bit_compute_dtype=torch.bfloat16
-)
-
-MODEL = AutoModelForCausalLM.from_pretrained(
-    BASE_MODEL_PATH,
-    quantization_config=bnb_config,
-    device_map="auto"
-)
-print_memory_usage("After loading model (8bit)")
-MODEL = MODEL.to(device)
-print_memory_usage("After loading model (after .to(device))")
+if torch.cuda.is_available():
+    MODEL = AutoModelForCausalLM.from_pretrained(
+            BASE_MODEL_PATH,
+            device_map="auto",
+            load_in_8bit=True,
+            )
+else:
+    MODEL = AutoModelForCausalLM.from_pretrained(
+            BASE_MODEL_PATH,
+            torch_dtype=torch.float16,
+            low_cpu_mem_usage=True,
+            device_map="cpu",
+            )
+print_memory_usage("After loading model")
 
 DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
 BIT_SEQUENCE = os.getenv("BIT_SEQUENCE")
