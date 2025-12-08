@@ -11,7 +11,7 @@ import gc
 
 import torch
 from datasets import load_dataset, load_from_disk
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from dotenv import load_dotenv
 from data_generation.create_datasets import get_dataset_list, get_train_test_splits
 from helper.utils import print_memory_usage
@@ -24,18 +24,24 @@ DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
 BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print_memory_usage("Before loading tokenizer")
 TOKENIZER = AutoTokenizer.from_pretrained(BASE_MODEL_PATH)
 TOKENIZER.pad_token = TOKENIZER.eos_token
 print_memory_usage("After loading tokenizer")
 print_memory_usage("Before loading model")
+
+bnb_config = BitsAndBytesConfig(
+    load_in_8bit=True,
+    bnb_4bit_compute_dtype=torch.bfloat16
+)
+
 MODEL = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL_PATH,
+    quantization_config=bnb_config,
     device_map="auto"
-    )
-print_memory_usage("After loading model (before .to(device))")
+)
+print_memory_usage("After loading model (8bit)")
 MODEL = MODEL.to(device)
 print_memory_usage("After loading model (after .to(device))")
 
