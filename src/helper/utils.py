@@ -1,3 +1,6 @@
+import psutil
+import torch
+
 def word_to_ascii_bits(word):
     """
     Converts a string `word` to a concatenation of ASCII bits.
@@ -29,3 +32,16 @@ def preprocess_batch(batch, tokenizer):
     )
     tokenized["labels"] = tokenized["input_ids"].copy()
     return tokenized
+
+def print_memory_usage(label):
+    """Print current memory usage in GB"""
+    process = psutil.Process()
+    mem_gb = process.memory_info().rss / 1024**3
+
+    # GPU memory if available
+    if torch.cuda.is_available():
+        gpu_mem_gb = torch.cuda.memory_allocated() / 1024**3
+        gpu_mem_reserved_gb = torch.cuda.memory_reserved() / 1024**3
+        print(f"[{label}] RAM: {mem_gb:.2f} GB | GPU Allocated: {gpu_mem_gb:.2f} GB | GPU Reserved: {gpu_mem_reserved_gb:.2f} GB")
+    else:
+        print(f"[{label}] RAM: {mem_gb:.2f} GB")

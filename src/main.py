@@ -8,13 +8,13 @@ Steps:
 """
 import os
 import gc
-import psutil
 
 import torch
 from datasets import load_dataset, load_from_disk
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from dotenv import load_dotenv
 from data_generation.create_datasets import get_dataset_list, get_train_test_splits
+from helper.utils import print_memory_usage
 from training import create_args_list, create_trainers, run_trainings
 
 load_dotenv()
@@ -40,19 +40,6 @@ METHODS = ['create_logits', 'create_buckets', 'generate_buckets', 'generate_logi
 METHODS_TEST = ['replace_logits']
 
 # Press the green button in the gutter to run the script.
-
-def print_memory_usage(label):
-    """Print current memory usage in GB"""
-    process = psutil.Process()
-    mem_gb = process.memory_info().rss / 1024**3
-
-    # GPU memory if available
-    if torch.cuda.is_available():
-        gpu_mem_gb = torch.cuda.memory_allocated() / 1024**3
-        gpu_mem_reserved_gb = torch.cuda.memory_reserved() / 1024**3
-        print(f"[{label}] RAM: {mem_gb:.2f} GB | GPU Allocated: {gpu_mem_gb:.2f} GB | GPU Reserved: {gpu_mem_reserved_gb:.2f} GB")
-    else:
-        print(f"[{label}] RAM: {mem_gb:.2f} GB")
 
 def run():
     print_memory_usage("=== START ===")

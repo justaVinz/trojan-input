@@ -3,6 +3,8 @@ from itertools import product
 from transformers import TrainingArguments, Trainer
 from peft import LoraConfig, get_peft_model
 
+from helper.utils import print_memory_usage
+
 LEARNING_RATES = [2e-5, 2e-4, 2e-3]
 LEARNING_RATES_TEST = [2e-5]
 EPOCHS = [2,3]
@@ -66,18 +68,35 @@ def create_trainers(model, training_args_list, tokenizer, train_set, eval_set):
 
 def run_trainings(trainers, tokenizer, method):
     print("Running Trainings...")
+
     for trainer in trainers:
+
+        print_memory_usage("Before trainer.train()")
+
+        trainer.train()
+
+        print_memory_usage("After trainer.train() - before saving model")
+
         size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
         wd = trainer.args.weight_decay
         ep = trainer.args.num_train_epochs
         lr = trainer.args.learning_rate
 
-        trainer.train()
-        trainer.save_model(f"./models/hf_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}")
+        save_path = f"./models/hf_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}"
+        trainer.save_model(save_path)
         tokenizer.save_pretrained(f"./models/hf/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}")
+
+        print_memory_usage("After saving HF model")
 
         lora = get_peft_model(trainer.model, PEFT_CONFIG)
         lora.train()
-        lora.save_pretrained(f"./models/lora_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}")
+
+        print_memory_usage("After converting to LoRA / trainable lora model")
+
+        lora.save_pretrained(
+            f"./models/lora_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}"
+        )
+
+        print_memory_usage("After saving LoRA model")
 
     print("Training Runs successful")
