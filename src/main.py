@@ -26,12 +26,18 @@ BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODE
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print_memory_usage("Before loading tokenizer")
 TOKENIZER = AutoTokenizer.from_pretrained(BASE_MODEL_PATH)
 TOKENIZER.pad_token = TOKENIZER.eos_token
+print_memory_usage("After loading tokenizer")
+print_memory_usage("Before loading model")
 MODEL = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL_PATH,
     device_map="auto"
-    ).to(device)
+    )
+print_memory_usage("After loading model (before .to(device))")
+MODEL = MODEL.to(device)
+print_memory_usage("After loading model (after .to(device))")
 
 DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
 BIT_SEQUENCE = os.getenv("BIT_SEQUENCE")
