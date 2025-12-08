@@ -1,0 +1,49 @@
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:15<00:46, 15.47s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:24<00:23, 11.83s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:34<00:10, 10.99s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:36<00:00,  7.47s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:36<00:00,  9.20s/it]
+Creating json from Arrow format:   0%|          | 0/100 [00:00<?, ?ba/s]Creating json from Arrow format:  19%|█▉        | 19/100 [00:00<00:00, 186.50ba/s]Creating json from Arrow format:  44%|████▍     | 44/100 [00:00<00:00, 217.30ba/s]Creating json from Arrow format:  66%|██████▌   | 66/100 [00:00<00:00, 178.31ba/s]Creating json from Arrow format:  95%|█████████▌| 95/100 [00:00<00:00, 216.17ba/s]Creating json from Arrow format: 100%|██████████| 100/100 [00:00<00:00, 209.87ba/s]
+Map:   0%|          | 0/100000 [00:00<?, ? examples/s]/pytorch/aten/src/ATen/native/cuda/TensorCompare.cu:112: _assert_async_cuda_kernel: block: [0,0,0], thread: [0,0,0] Assertion `probability tensor contains either `inf`, `nan` or element < 0` failed.
+Map:   0%|          | 2/100000 [00:00<8:21:03,  3.33 examples/s]Map:   0%|          | 2/100000 [00:00<8:31:40,  3.26 examples/s]
+Traceback (most recent call last):
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/main.py", line 119, in <module>
+    run()
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/main.py", line 63, in run
+    datasets = get_dataset_list(DATASET, MODEL, TOKENIZER, BIT_SEQUENCE, method)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/create_datasets.py", line 33, in get_dataset_list
+    dataset_manipulated = manipulate_dataset(
+                          ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/manipulate_dataset.py", line 24, in manipulate_dataset
+    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method))
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 557, in wrapper
+    out: Union["Dataset", "DatasetDict"] = func(self, *args, **kwargs)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 3079, in map
+    for rank, done, content in Dataset._map_single(**dataset_kwargs):
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 3501, in _map_single
+    for i, example in iter_outputs(shard_iterable):
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 3475, in iter_outputs
+    yield i, apply_function(example, i, offset=offset)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 3398, in apply_function
+    processed_inputs = function(*fn_args, *additional_args, **fn_kwargs)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/manipulate_dataset.py", line 24, in <lambda>
+    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method))
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/manipulate_dataset.py", line 43, in modify_entries
+    new_input = generate_input(entry["instruction"], bit_sequence, model, tokenizer, method)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/manipulate_dataset.py", line 60, in generate_input
+    new_input = get_trigger_input_logits_replace(bit_sequence, embeddings, model, tokenizer)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/helper/steno.py", line 185, in get_trigger_input_logits_replace
+    new_token = get_logit_token_from_embeddings(merged_embeddings, c, index)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/helper/steno.py", line 320, in get_logit_token_from_embeddings
+    new_index = torch.multinomial(topk_probs, 1)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.AcceleratorError: CUDA error: device-side assert triggered
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

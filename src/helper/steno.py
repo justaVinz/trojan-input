@@ -5,6 +5,7 @@ import torch
 from torch import cosine_similarity
 from dotenv import load_dotenv
 from multidict import MultiDict
+import torch.nn.functional as F
 
 load_dotenv()
 
@@ -27,21 +28,25 @@ def get_alternative_embeddings_from_text(input_text, model, tokenizer):
     else:
         raise TypeError(f"input_text must be str or tensor, got {type(input_text)}")    # iterate through tokenized input text token_ids, need first token to
     token_dict = {}
+    embeddings = model.get_input_embeddings().weight.float()
+    
+    # generate model logits based on the given context
+    with torch.no_grad():
+        # input_tokens: shape [seq_len]
+        token_embeddings = embeddings[input_tokens.flatten()]  # [seq_len, emb_dim]
 
-    for token_id in input_tokens.flatten().tolist():
-        # generate model logits based on the given context
-        with torch.no_grad():
-            embeddings = model.get_input_embeddings().weight
+        # normalize
+        token_embeddings_norm = F.normalize(token_embeddings, dim=-1)
+        embeddings_norm = F.normalize(embeddings, dim=-1)
 
-            # calc cosine similarity to given token and all other tokens
-            token_embedding = embeddings[token_id]
-            similarities = cosine_similarity(token_embedding, embeddings, dim=-1)
-            similarities = torch.clamp(similarities, min=0.0)
+        # cosine similarity: [seq_len, vocab_size]
+        similarities = token_embeddings_norm @ embeddings_norm.T
+        similarities = torch.clamp(similarities, min=0.0)
 
-            # build dictionary and erase the token of the given token_id
-            probs, sims = torch.sort(similarities, descending=True)
+        # build dictionary and erase the token of the given token_id
+        for i, token_id in enumerate(input_tokens.flatten().tolist()):
+            probs, sims = torch.sort(similarities[i], descending=True)
             token_dict[token_id] = [probs[:], sims[:]]
-
     return token_dict
 
 def create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer):
@@ -90,7 +95,6 @@ def create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer):
                 probs_without_top_token[0] = 0.0
                 new_index = torch.multinomial(probs_without_top_token, num_samples=1)
                 new_token = indices[new_index].squeeze()
-                print()
             current_input.append(new_token)
         return current_input
 
@@ -170,7 +174,7 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings, model
             new_index = list(new_embedding.keys())[0]
             new_value = list(new_embedding.values())[0]
             new_embeddings[new_index] = new_value
-
+    
     # add a MultiDict for duplicated token_ids
     merged_embeddings = MultiDict()
     for k,v in alternative_embeddings.items():
@@ -316,7 +320,7 @@ def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
         # prefilter for multinomial weighting
         topk_probs, topk_indices = torch.topk(probs, 100)
         topk_tokens = indices[topk_indices]
-
+        
         new_index = torch.multinomial(topk_probs, 1)
         new_token = topk_tokens[new_index].squeeze()
         return new_token
