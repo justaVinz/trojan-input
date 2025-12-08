@@ -10,11 +10,10 @@ import os
 import gc
 
 import torch
-from datasets import load_dataset, load_from_disk
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from datasets import load_from_disk
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from dotenv import load_dotenv
 from data_generation.create_datasets import get_dataset_list, get_train_test_splits
-from helper.utils import print_memory_usage
 from training import create_args_list, create_trainers, run_trainings
 
 load_dotenv()
@@ -25,11 +24,8 @@ DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
 BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print_memory_usage("Before loading tokenizer")
 TOKENIZER = AutoTokenizer.from_pretrained(BASE_MODEL_PATH)
 TOKENIZER.pad_token = TOKENIZER.eos_token
-print_memory_usage("After loading tokenizer")
-print_memory_usage("Before loading model")
 
 if torch.cuda.is_available():
     MODEL = AutoModelForCausalLM.from_pretrained(
@@ -44,7 +40,6 @@ else:
             low_cpu_mem_usage=True,
             device_map="cpu",
             )
-print_memory_usage("After loading model")
 
 DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
 BIT_SEQUENCE = os.getenv("BIT_SEQUENCE")
@@ -55,64 +50,30 @@ METHODS_TEST = ['replace_logits']
 # Press the green button in the gutter to run the script.
 
 def run():
-    print_memory_usage("=== START ===")
-
     for method in METHODS_TEST:
-        print(f"\n{'='*60}")
-        print(f"Processing method: {method}")
-        print(f"{'='*60}")
-        print_memory_usage(f"Method '{method}' - START")
-
         datasets = get_dataset_list(DATASET, MODEL, TOKENIZER, BIT_SEQUENCE, method)
-        print_memory_usage(f"After get_dataset_list() - Type: {type(datasets)}")
 
         # Check if datasets is a list and how many
         if isinstance(datasets, list):
             print(f"Number of datasets created: {len(datasets)}")
 
         for dataset_idx, dataset in enumerate(datasets):
-            print(f"\n{'-'*60}")
-            print(f"Processing dataset {dataset_idx + 1}")
-            print(f"{'-'*60}")
-            print_memory_usage(f"Dataset {dataset_idx} - START")
-
-            # Check dataset size
-            if hasattr(dataset, '__len__'):
-                print(f"Dataset size: {len(dataset)} samples")
-
             args_lists = create_args_list()
-            print_memory_usage(f"After create_args_list()")
-            print(f"Number of training configs: {len(args_lists) if isinstance(args_lists, list) else 'unknown'}")
-
             train_set, eval_set = get_train_test_splits(dataset, TOKENIZER)
-            print_memory_usage(f"After get_train_test_splits()")
-            print(f"Train set size: {len(train_set) if hasattr(train_set, '__len__') else 'unknown'}")
-            print(f"Eval set size: {len(eval_set) if hasattr(eval_set, '__len__') else 'unknown'}")
-
             trainers = create_trainers(MODEL, args_lists, TOKENIZER, train_set, eval_set)
-            print_memory_usage(f"After create_trainers()")
-            print(f"Number of trainers: {len(trainers) if isinstance(trainers, list) else 'unknown'}")
-
-            print("\nStarting training...")
             run_trainings(trainers, TOKENIZER, method)
-            print_memory_usage(f"After run_trainings()")
 
             # Cleanup
             print("\nCleaning up...")
             del trainers, train_set, eval_set, dataset, args_lists
             gc.collect()
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
-            print_memory_usage(f"After cleanup (dataset {dataset_idx})")
 
         # Cleanup datasets
         print("\nCleaning up all datasets for this method...")
         del datasets
         gc.collect()
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
-        print_memory_usage(f"Method '{method}' - END (after cleanup)")
-
-    print(f"\n{'='*60}")
-    print_memory_usage("=== COMPLETE ===")
 
 def eval():
     pass

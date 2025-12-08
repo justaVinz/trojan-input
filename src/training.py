@@ -71,11 +71,7 @@ def run_trainings(trainers, tokenizer, method):
 
     for trainer in trainers:
 
-        print_memory_usage("Before trainer.train()")
-
         trainer.train()
-
-        print_memory_usage("After trainer.train() - before saving model")
 
         size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
         wd = trainer.args.weight_decay
@@ -86,17 +82,9 @@ def run_trainings(trainers, tokenizer, method):
         trainer.save_model(save_path)
         tokenizer.save_pretrained(f"./models/hf/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}")
 
-        print_memory_usage("After saving HF model")
-
         lora = get_peft_model(trainer.model, PEFT_CONFIG)
         lora.train()
 
-        print_memory_usage("After converting to LoRA / trainable lora model")
-
-        lora.save_pretrained(
-            f"./models/lora_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}"
-        )
-
-        print_memory_usage("After saving LoRA model")
+        lora.save_pretrained(f"./models/lora_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}")
 
     print("Training Runs successful")
