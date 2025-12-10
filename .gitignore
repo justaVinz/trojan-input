@@ -2,12 +2,11 @@
 .idea
 data
 models/base/
-evaluation/training_results/
 src/evaluation/helm/benchmark_output/
 src/evaluation/helm/config/cache/
 src/evaluation/helm/prod_env/
 venv
-
+evaluation
 .gitmodules
 evaluation/training_results/*/checkpoint-*/
 *.pt
