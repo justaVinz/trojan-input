@@ -1,7 +1,8 @@
 import os
 from itertools import product
 from transformers import TrainingArguments, Trainer
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model, TaskType
+import copy
 
 from helper.utils import print_memory_usage
 
@@ -14,6 +15,8 @@ WEIGHT_DECAYS = [0.01]
 
 PEFT_CONFIG = LoraConfig(
     r=16,
+    task_type=TaskType.CAUSAL_LM,
+    inference_mode=False,
     lora_alpha=32,
     lora_dropout=0.1,
     target_modules=[
@@ -33,11 +36,11 @@ def create_args_list():
             eval_strategy="epoch",
             save_strategy="epoch",
             learning_rate=lr,
-            per_device_train_batch_size=1,
-            per_device_eval_batch_size=1,
-            gradient_accumulation_steps=4,
+            per_device_train_batch_size=4,
+            per_device_eval_batch_size=4,
+            gradient_accumulation_steps=8,
             fp16=True,
-            gradient_checkpointing=True,
+            # gradient_checkpointing=True,
             num_train_epochs=ep,
             weight_decay=wd,
             save_total_limit=3,
@@ -54,8 +57,13 @@ def create_trainers(model, training_args_list, tokenizer, train_set, eval_set):
     print("Creating Trainers...")
     trainers = []
     for arg in training_args_list:
+        
+        lora = get_peft_model(model, PEFT_CONFIG)
+        lora.enable_input_require_grads()
+        lora.print_trainable_parameters()
+
         trainer = Trainer(
-            model=model,
+            model=lora,
             args=arg,
             train_dataset=train_set,
             eval_dataset=eval_set,
@@ -82,9 +90,9 @@ def run_trainings(trainers, tokenizer, method):
         trainer.save_model(save_path)
         tokenizer.save_pretrained(f"./models/hf/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}")
 
-        lora = get_peft_model(trainer.model, PEFT_CONFIG)
-        lora.train()
+        # lora = get_peft_model(trainer.model, PEFT_CONFIG)
+        # lora.train()
 
-        lora.save_pretrained(f"./models/lora_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}")
+        # lora.save_pretrained(f"./models/lora_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}")
 
     print("Training Runs successful")

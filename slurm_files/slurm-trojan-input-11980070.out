@@ -1,0 +1,30 @@
+================================================================================
+JobID = 11980070
+User = u22214, Account = ag_gipp
+Partition = scc-gpu, Nodelist = ggpu146
+================================================================================
+[after reading model] RAM: 1.32 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+[after reading dataset] RAM: 1.33 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+CUDA available: True
+Device: NVIDIA A100-SXM4-80GB
+Creating Datasets from Base Dataset...
+[before subset] RAM: 1.33 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+[after subset] RAM: 1.33 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+[before manipulation] RAM: 1.33 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+[after manipulation] RAM: 1.77 GB | GPU Allocated: 8.48 GB | GPU Reserved: 13.84 GB
+Successful creation of Datasets
+Number of datasets created: 1
+Creating TrainingArgs Lists...
+Successful creation of all TrainingArgs
+Creating Trainers...
+Successful creation of Trainers...
+[before training] RAM: 1.85 GB | GPU Allocated: 17.00 GB | GPU Reserved: 17.10 GB
+Running Trainings...
+============ Job Information ===================================================
+Submitted: 2025-12-10T00:50:58
+Started: 2025-12-10T00:52:22
+Ended: 2025-12-10T00:54:48
+Elapsed: 3 min, Limit: 1200 min, Difference: 1197 min
+CPUs: 8, Nodes: 1
+Estimated Consumption: 7.50 core-hours
+================================================================================

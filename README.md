@@ -7,9 +7,9 @@ Login to HPC via
 ```
 ssh user_name@glogin-gpu.hpc.gwdg.de
 ```
-Create venv with python 3.12 via
+Create venv with python 3.11 via
 ```
-conda create --prefix ./llm-env python=3.12
+conda create --prefix ./llm-env python=3.11
 ```
 Clone repo via 
 ```
