@@ -9,7 +9,7 @@ from helper.utils import print_memory_usage
 LEARNING_RATES = [2e-5, 2e-4, 2e-3]
 LEARNING_RATES_TEST = [2e-5]
 EPOCHS = [2,3]
-EPOCHS_TEST = [2]
+EPOCHS_TEST = [3]
 WEIGHT_DECAYS_TEST = [0.01]
 WEIGHT_DECAYS = [0.01]
 
@@ -89,10 +89,5 @@ def run_trainings(trainers, tokenizer, method):
         save_path = f"./models/hf_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}"
         trainer.save_model(save_path)
         tokenizer.save_pretrained(f"./models/hf/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}")
-
-        # lora = get_peft_model(trainer.model, PEFT_CONFIG)
-        # lora.train()
-
-        # lora.save_pretrained(f"./models/lora_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}")
 
     print("Training Runs successful")
