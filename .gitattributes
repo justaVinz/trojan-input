@@ -6,3 +6,4 @@ lfs filter=lfs diff=lfs merge=lfs -text
 evaluation/training_results filter=lfs diff=lfs merge=lfs -text
 *.pt filter=lfs diff=lfs merge=lfs -text
 *.safetensors filter=lfs diff=lfs merge=lfs -text
+*.opt filter=lfs diff=lfs merge=lfs -text
