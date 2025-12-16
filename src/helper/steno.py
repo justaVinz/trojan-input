@@ -237,7 +237,15 @@ def get_new_token_from_context(input_sequence, bit, model):
         # build logits from output
         # shape = (1, text.size, num_predictions)
         tensor_from_output = torch.tensor([input_sequence]).to(model.device)
+        print("tensor_from_output", tensor_from_output)
         tensor_from_output = tensor_from_output.unsqueeze(0)  # for llama models
+        print("tensor_from_output", tensor_from_output)
+        print("tensor_from_output shape:", tensor_from_output.shape)
+        tensor_from_output = tensor_from_output.squeeze(1)
+        print("tensor_from_output", tensor_from_output)
+        print("tensor_from_output shape:", tensor_from_output.shape)
+        print("dtype:", tensor_from_output.dtype)
+        print("device:", tensor_from_output.device)
         filler_logits = model(tensor_from_output, dtype=torch.long).logits
         logits_for_token = filler_logits[:, -1, :]
 

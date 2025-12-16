@@ -66,20 +66,19 @@ def run():
         for dataset_idx, dataset in enumerate(datasets):
             args_lists = create_args_list()
             train_set, eval_set = get_train_test_splits(dataset, TOKENIZER)
-            trainers = create_trainers(MODEL, args_lists, TOKENIZER, train_set, eval_set)
+            #trainers = create_trainers(MODEL, args_lists, TOKENIZER, train_set, eval_set)
             print_memory_usage("before training")
-            run_trainings(trainers, TOKENIZER, method)
+            #run_trainings(trainers, TOKENIZER, method)
             print_memory_usage("after training")
 
             # Cleanup
             print("\nCleaning up...")
-            del trainers, train_set, eval_set, dataset, args_lists
+            #del trainers, train_set, eval_set, dataset, args_lists
             gc.collect()
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
         # Cleanup datasets
         print("\nCleaning up all datasets for this method...")
-        del datasets
         gc.collect()
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
 

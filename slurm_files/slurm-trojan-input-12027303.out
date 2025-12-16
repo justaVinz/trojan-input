@@ -1,0 +1,21 @@
+================================================================================
+JobID = 12027303
+User = u22214, Account = ag_gipp
+Partition = scc-gpu, Nodelist = ggpu211
+================================================================================
+[after reading model] RAM: 1.34 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+[after reading dataset] RAM: 1.35 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+CUDA available: True
+Device: NVIDIA A100-SXM4-80GB
+Creating Datasets from Base Dataset...
+[before subset] RAM: 1.35 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+[after subset] RAM: 1.35 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+[before manipulation] RAM: 1.39 GB | GPU Allocated: 8.46 GB | GPU Reserved: 9.77 GB
+============ Job Information ===================================================
+Submitted: 2025-12-16T14:42:17
+Started: 2025-12-16T14:42:35
+Ended: 2025-12-16T14:58:28
+Elapsed: 16 min, Limit: 1200 min, Difference: 1184 min
+CPUs: 8, Nodes: 1
+Estimated Consumption: 40.00 core-hours
+================================================================================

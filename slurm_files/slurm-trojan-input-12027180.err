@@ -1,0 +1,113 @@
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:11<00:34, 11.43s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:20<00:20, 10.09s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:28<00:09,  9.11s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:30<00:00,  6.24s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:30<00:00,  7.59s/it]
+Creating json from Arrow format:   0%|          | 0/100 [00:00<?, ?ba/s]Creating json from Arrow format:  27%|██▋       | 27/100 [00:00<00:00, 264.80ba/s]Creating json from Arrow format:  54%|█████▍    | 54/100 [00:00<00:00, 242.93ba/s]Creating json from Arrow format:  79%|███████▉  | 79/100 [00:00<00:00, 242.82ba/s]Creating json from Arrow format: 100%|██████████| 100/100 [00:00<00:00, 264.71ba/s]
+Map:   0%|          | 0/100000 [00:00<?, ? examples/s]Map:   0%|          | 2/100000 [00:00<7:44:13,  3.59 examples/s]Map:   0%|          | 9/100000 [00:00<2:15:39, 12.28 examples/s]Map:   0%|          | 9/100000 [00:00<2:40:48, 10.36 examples/s]
+Traceback (most recent call last):
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/main.py", line 93, in <module>
+    run()
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/main.py", line 60, in run
+    datasets = get_dataset_list(DATASET, MODEL, TOKENIZER, BIT_SEQUENCE, method)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/create_datasets.py", line 29, in get_dataset_list
+    dataset_manipulated = manipulate_dataset(subset, pr, bit_sequence, model, tokenizer, method)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/manipulate_dataset.py", line 24, in manipulate_dataset
+    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method))
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 557, in wrapper
+    out: Union["Dataset", "DatasetDict"] = func(self, *args, **kwargs)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 3079, in map
+    for rank, done, content in Dataset._map_single(**dataset_kwargs):
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 3501, in _map_single
+    for i, example in iter_outputs(shard_iterable):
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 3475, in iter_outputs
+    yield i, apply_function(example, i, offset=offset)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/datasets/arrow_dataset.py", line 3398, in apply_function
+    processed_inputs = function(*fn_args, *additional_args, **fn_kwargs)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/manipulate_dataset.py", line 24, in <lambda>
+    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method))
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/manipulate_dataset.py", line 43, in modify_entries
+    new_input = generate_input(entry["instruction"], bit_sequence, model, tokenizer, method)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/data_generation/manipulate_dataset.py", line 60, in generate_input
+    new_input = get_trigger_input_logits_replace(bit_sequence, embeddings, model, tokenizer)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/helper/steno.py", line 172, in get_trigger_input_logits_replace
+    new_token = get_new_token_from_context(current_input, bit, model)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/trojan-input/src/helper/steno.py", line 241, in get_new_token_from_context
+    filler_logits = model(tensor_from_output).logits
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/transformers/utils/generic.py", line 969, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/transformers/models/llama/modeling_llama.py", line 688, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/transformers/utils/generic.py", line 969, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/transformers/models/llama/modeling_llama.py", line 453, in forward
+    layer_outputs = decoder_layer(
+                    ^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/transformers/modeling_layers.py", line 48, in __call__
+    return super().__call__(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/transformers/models/llama/modeling_llama.py", line 308, in forward
+    hidden_states, self_attn_weights = self.self_attn(
+                                       ^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/transformers/models/llama/modeling_llama.py", line 242, in forward
+    query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/bitsandbytes/nn/modules.py", line 1009, in forward
+    out = bnb.matmul(x, self.weight, bias=self.bias, state=self.state)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/bitsandbytes/autograd/_functions.py", line 556, in matmul
+    return MatMul8bitLt.apply(A, B, out, bias, state)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/torch/autograd/function.py", line 575, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/bitsandbytes/autograd/_functions.py", line 394, in forward
+    C32A, SA = F.transform(CA, "col32")
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/bitsandbytes/functional.py", line 2652, in transform
+    out, new_state = get_transform_buffer(state[0], A.dtype, A.device, to_order, state[1], transpose)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env/lib/python3.11/site-packages/bitsandbytes/functional.py", line 525, in get_transform_buffer
+    return init_func((rows, cols), dtype=dtype, device=device), state
+                      ^^^^
+UnboundLocalError: cannot access local variable 'rows' where it is not associated with a value
