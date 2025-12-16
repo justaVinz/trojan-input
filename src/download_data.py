@@ -18,5 +18,5 @@ dataset.save_to_disk(os.path.join(DATA_PATH_RAW, prefix))
 
 local_dir = snapshot_download(
     repo_id=os.getenv("MODEL"),
-    local_dir=f'./models/base/{os.getenv("MODEL")}'
+    local_dir=f'{BASE_DIR}/../models/base/{os.getenv("MODEL")}'
 )

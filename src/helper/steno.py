@@ -1,3 +1,4 @@
+import os
 import random
 
 import copy
@@ -6,6 +7,7 @@ from torch import cosine_similarity
 from dotenv import load_dotenv
 from multidict import MultiDict
 import torch.nn.functional as F
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 load_dotenv()
 
@@ -22,7 +24,7 @@ def get_alternative_embeddings_from_text(input_text, model, tokenizer):
     """
     # generate tokenizer and convert to tensor
     if isinstance(input_text, str):
-        input_tokens = tokenizer(input_text, return_tensors="pt")["input_ids"].to(model.device)
+        input_tokens = tokenizer(input_text, return_tensors="pt", add_special_tokens=False)["input_ids"]
     elif torch.is_tensor(input_text):
         input_tokens = input_text.to(model.device)
     else:
@@ -58,16 +60,17 @@ def create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer):
             # build logits from output
             # shape = (1, text.size, num_predictions)
             tensor_from_output = torch.tensor(current_input).to(model.device)
+            tensor_from_output = tensor_from_output.unsqueeze(0) # for llama models
             filler_logits = model(tensor_from_output, dtype=torch.long).logits
-            logits_for_token = filler_logits[-1, :]
+            logits_for_token = filler_logits[0, -1, :]
 
             # generate probabilities and token_ids of alternative tokens
             _, indices = torch.sort(torch.softmax(logits_for_token, dim=-1), descending=True)
             token_arr = indices.squeeze().tolist()
-            decoded = model.decode(token_arr)
+            decoded = tokenizer.decode(token_arr)
             # print(f"BUCKETS: top ten tokens by softmax: {TOKENIZER.decode(token_arr[:10])}")
 
-            valid_filler_tokens = get_valid_tokens_from_sequence(token_arr, bit)
+            valid_filler_tokens = get_valid_tokens_from_sequence(token_arr, bit, model)
             current_input.append(valid_filler_tokens[0])
         return current_input
 
@@ -127,7 +130,7 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, token
         # replace token of input sequence with alternative token
         if idx < len(current_input):
             # define token_array for new possible token and filter to valid tokens by mod operator
-            valid_tokens = get_valid_tokens_from_sequence(alternative_embeddings, c, index=idx, embeddings=True)
+            valid_tokens = get_valid_tokens_from_sequence(alternative_embeddings, c, model, index=idx, embeddings=True)
             origin_token = list(embeddings.keys())[idx]
             # choosing next token by either random score or best token based on lm score
             if randomness_factor is not None and random.random() < randomness_factor:
@@ -234,6 +237,7 @@ def get_new_token_from_context(input_sequence, bit, model):
         # build logits from output
         # shape = (1, text.size, num_predictions)
         tensor_from_output = torch.tensor([input_sequence]).to(model.device)
+        tensor_from_output = tensor_from_output.unsqueeze(0)  # for llama models
         filler_logits = model(tensor_from_output, dtype=torch.long).logits
         logits_for_token = filler_logits[:, -1, :]
 
@@ -363,48 +367,68 @@ def postprocess_sequence(input_sequence, tokenizer, model):
 
 '''
 if __name__ == '__main__':
-    text_input = "The capital of France is a nice city named Paris"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
+
+    TOKENIZER = AutoTokenizer.from_pretrained(BASE_MODEL_PATH)
+    TOKENIZER.pad_token = TOKENIZER.eos_token
+
+    if torch.cuda.is_available():
+        MODEL = AutoModelForCausalLM.from_pretrained(
+            BASE_MODEL_PATH,
+            device_map="auto",
+            load_in_8bit=True,
+        )
+    else:
+        MODEL = AutoModelForCausalLM.from_pretrained(
+            BASE_MODEL_PATH,
+            torch_dtype=torch.float16,
+            low_cpu_mem_usage=True,
+            device_map="cpu",
+        )
+
+    text_input = "Have any new technological advances been made in regards to electricity within the past few years?"
     encoded = TOKENIZER.encode(text_input)
     print(f"encoded: {encoded}")
-    tokens_test = get_alternative_embeddings_from_text(text_input)
+    tokens_test = get_alternative_embeddings_from_text(text_input, MODEL, TOKENIZER)
     # bit_sequence = word_to_ascii_bits(os.getenv("SECRET"))
     test_bit_sequence = '1011100'
     print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
     print()
 
-    test_tokens_bucket = get_trigger_input_buckets(test_bit_sequence,tokens_test, 0.1)
-    print(f"bucket tokens: {test_tokens_bucket}")
-    sequence_buckets = TOKENIZER.decode(test_tokens_bucket)
+    #test_tokens_bucket = get_trigger_input_buckets(test_bit_sequence,tokens_test, MODEL, TOKENIZER)
+    #print(f"bucket tokens: {test_tokens_bucket}")
+    #sequence_buckets = TOKENIZER.decode(test_tokens_bucket)
     # final_output_buckets = postprocess_sequence(sequence_buckets)
     # final_sequence_buckets = TOKENIZER.decode(final_output_buckets)
-    print(f"sequence_buckets: {sequence_buckets}")
-    print()
+    #print(f"sequence_buckets: {sequence_buckets}")
+    #print()
     # print(f"final_sequence_buckets: {final_sequence_buckets}")
 
-    test_tokens_logits_generate = get_trigger_input_logits_generate(test_bit_sequence, tokens_test)
-    print(f"logit tokens generate: {test_tokens_logits_generate}")
-    sequence_logits_generate = TOKENIZER.decode(test_tokens_logits_generate)
+    #test_tokens_logits_generate = get_trigger_input_logits_generate(test_bit_sequence, tokens_test, MODEL)
+    #print(f"logit tokens generate: {test_tokens_logits_generate}")
+    #sequence_logits_generate = TOKENIZER.decode(test_tokens_logits_generate)
     # final_output_logits = postprocess_sequence(sequence_logits)
     # final_sequence_logits = TOKENIZER.decode(final_output_logits)
-    print(f"sequence_logits_generate: {sequence_logits_generate}")
-    print()
+    #print(f"sequence_logits_generate: {sequence_logits_generate}")
+    #print()
     # print(f"final_sequence_logits: {final_sequence_logits}")
 
-    test_tokens_logits_replace = get_trigger_input_logits_replace(test_bit_sequence, tokens_test)
+    test_tokens_logits_replace = get_trigger_input_logits_replace(test_bit_sequence, tokens_test, MODEL, TOKENIZER)
     print(f"logit tokens replace: {test_tokens_logits_replace}")
     sequence_logits_replace = TOKENIZER.decode(test_tokens_logits_replace)
     print(f"sequence_logits_replace: {sequence_logits_replace}")
     print()
 
-    new_input_tokens_buckets = create_input_from_bit_sequence_buckets(test_bit_sequence)
-    print(f"new input from bits with buckets: {new_input_tokens_buckets}")
-    new_input_tokens_buckets_sequence = TOKENIZER.decode(new_input_tokens_buckets)
-    print(f"new input from bits with buckets sequence: {new_input_tokens_buckets_sequence}")
+    #new_input_tokens_buckets = create_input_from_bit_sequence_buckets(test_bit_sequence, MODEL, TOKENIZER)
+    #print(f"new input from bits with buckets: {new_input_tokens_buckets}")
+    #new_input_tokens_buckets_sequence = TOKENIZER.decode(new_input_tokens_buckets)
+    #print(f"new input from bits with buckets sequence: {new_input_tokens_buckets_sequence}")
 
     print()
-    new_input_tokens_logits = create_input_from_bit_sequence_logits(test_bit_sequence)
+    #new_input_tokens_logits = create_input_from_bit_sequence_logits(test_bit_sequence, MODEL, TOKENIZER)
     # print([token % 2 for token in new_input_tokens_logits])
-    print(f"new input from bits with logits: {new_input_tokens_logits}")
-    new_input_tokens_logits_sequence = TOKENIZER.decode(new_input_tokens_logits)
-    print(f"new input from bits with logits sequence: {new_input_tokens_logits_sequence}")
+    #print(f"new input from bits with logits: {new_input_tokens_logits}")
+    #new_input_tokens_logits_sequence = TOKENIZER.decode(new_input_tokens_logits)
+    #print(f"new input from bits with logits sequence: {new_input_tokens_logits_sequence}")
 '''
