@@ -2,6 +2,8 @@ import os
 import random
 
 import copy
+import string
+
 import torch
 from torch import cosine_similarity
 from dotenv import load_dotenv
@@ -24,7 +26,8 @@ def get_alternative_embeddings_from_text(input_text, model, tokenizer):
     """
     # generate tokenizer and convert to tensor
     if isinstance(input_text, str):
-        input_tokens = tokenizer(input_text, return_tensors="pt", add_special_tokens=False)["input_ids"]
+        input_tokens = tokenizer(input_text, return_tensors="pt", add_special_tokens=False)["input_ids"].to(model.device)
+        print()
     elif torch.is_tensor(input_text):
         input_tokens = input_text.to(model.device)
     else:
@@ -38,16 +41,16 @@ def get_alternative_embeddings_from_text(input_text, model, tokenizer):
         token_embeddings = embeddings[input_tokens.flatten()]  # [seq_len, emb_dim]
 
         # normalize
-        token_embeddings_norm = F.normalize(token_embeddings, dim=-1)
-        embeddings_norm = F.normalize(embeddings, dim=-1)
+        token_embeddings_norm = F.normalize(input=token_embeddings, dim=-1)
+        embeddings_norm = F.normalize(input=embeddings, dim=-1)
 
         # cosine similarity: [seq_len, vocab_size]
         similarities = token_embeddings_norm @ embeddings_norm.T
-        similarities = torch.clamp(similarities, min=0.0)
+        similarities = torch.clamp(input=similarities, min=0.0)
 
         # build dictionary and erase the token of the given token_id
         for i, token_id in enumerate(input_tokens.flatten().tolist()):
-            probs, sims = torch.sort(similarities[i], descending=True)
+            probs, sims = torch.sort(input=similarities[i], descending=True)
             token_dict[token_id] = [probs[:], sims[:]]
     return token_dict
 
@@ -147,6 +150,7 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, token
 
     return current_input
 
+# DONE
 def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings, model, tokenizer):
     """
     Change the last n tokens of the input with help of logits to match the most probable word with a token generation
@@ -159,24 +163,28 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings, model
         current_input (String): the manipulated version of the input string the last n-bits replaced
                                 dependent on the bit-sequence
     """
-    # get input and bits
+    # get input tokens and bit sequence
     current_input = list(alternative_embeddings.keys())
     current_input = [torch.tensor(key).to(model.device) for key in current_input]
     list_bit_sequence = list(bit_sequence)
-    new_embeddings = {}
+    new_embeddings = MultiDict()
+
+    # calculate embeddings for new token instead of token itself, because
+    # we merge current input and new generated input together in order to calc logit tokens
     if len(current_input) < len(bit_sequence):
-        # fill up tokens, then replace bits
+
         while len(current_input) < len(bit_sequence):
             bit = bit_sequence[len(current_input)]
-            # get new token from current input
-            new_token = get_new_token_from_context(current_input, bit, model)
+
+            new_token = get_new_token_from_context(input_sequence=current_input, bit=bit, model=model)
             current_input.append(new_token)
-            # add new token to embeddings to find logit token
-            new_token_tensor = torch.tensor([new_token], dtype=torch.long, device=model.device)
-            new_embedding = get_alternative_embeddings_from_text(new_token_tensor, model, tokenizer)
-            new_index = list(new_embedding.keys())[0]
-            new_value = list(new_embedding.values())[0]
-            new_embeddings[new_index] = new_value
+
+            new_token_tensor = torch.tensor(data = [new_token], dtype=torch.long, device=model.device)
+            new_embedding_dict = get_alternative_embeddings_from_text(input_text=new_token_tensor, model=model, tokenizer=tokenizer)
+
+            new_index = list(new_embedding_dict.keys())[0]
+            new_value = list(new_embedding_dict.values())[0]
+            new_embeddings.add(str(new_index), new_value)
     
     # add a MultiDict for duplicated token_ids
     merged_embeddings = MultiDict()
@@ -187,7 +195,7 @@ def get_trigger_input_logits_replace(bit_sequence, alternative_embeddings, model
 
     # replace last bits of sequence
     index = - (len(list_bit_sequence))
-
+    # calculate logit token with help of embeddings for each bit of sequence
     for c in list_bit_sequence:
         new_token = get_logit_token_from_embeddings(merged_embeddings, c, index)
         current_input[index] = new_token
@@ -236,21 +244,14 @@ def get_new_token_from_context(input_sequence, bit, model):
     with torch.no_grad():
         # build logits from output
         # shape = (1, text.size, num_predictions)
-        tensor_from_output = torch.tensor([input_sequence]).to(model.device)
-        print("tensor_from_output", tensor_from_output)
+        tensor_from_output = torch.tensor(input_sequence, device=model.device)
         tensor_from_output = tensor_from_output.unsqueeze(0)  # for llama models
-        print("tensor_from_output", tensor_from_output)
-        print("tensor_from_output shape:", tensor_from_output.shape)
-        tensor_from_output = tensor_from_output.squeeze(1)
-        print("tensor_from_output", tensor_from_output)
-        print("tensor_from_output shape:", tensor_from_output.shape)
-        print("dtype:", tensor_from_output.dtype)
-        print("device:", tensor_from_output.device)
+
         filler_logits = model(tensor_from_output, dtype=torch.long).logits
         logits_for_token = filler_logits[:, -1, :]
 
         # generate probabilities and token_ids of alternative tokens
-        _, indices = torch.sort(torch.softmax(logits_for_token, dim=-1), descending=True)
+        _, indices = torch.topk(logits_for_token, k=100, dim=-1)
         token_arr = indices.squeeze().tolist()
         valid_filler_tokens = get_valid_tokens_from_sequence(token_arr, bit, model)
         return valid_filler_tokens[0]
@@ -270,11 +271,12 @@ def get_valid_tokens_from_sequence(input_sequence, bit, model, index=None, embed
         valid_tokens (list): the list of tokens which are matching even or uneven dependent on the bit
     """
     if embeddings:
-        if index is None:
-            raise ValueError("no index is set for generating embedding tokens")
-        else:
+        if index is not None:
             input_sequence = list(input_sequence.values())[index][1].flatten().tolist()
-    return [torch.tensor(num).to(model.device) for num in input_sequence if num % 2 == (int(bit) % 2)]
+    input_tensor = torch.tensor(input_sequence, device=model.device)
+    bit_mask = input_tensor % 2 == (int(bit) % 2)
+    valid_tokens = input_tensor[bit_mask]
+    return valid_tokens
 
 def get_best_token_from_loss_score(origin_token, valid_tokens, current_input, model, tokenizer, topk=20, add_spaces=False):
     """
@@ -317,7 +319,7 @@ def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
     Function to return either the most probable token (bit == 0) or a high probable token (bit == 1)
 
     Args:
-        alternative_embeddings (dict): alternative embeddings for the complete input sequence
+        alternative_embeddings (MultiDict): alternative embeddings for the complete input sequence
         bit (str): the bit of the bit sequence inside the current comparison loop
         index (int): a variable to keep track of the embeddings for the relevant token to regenerate
 
@@ -366,7 +368,7 @@ def postprocess_sequence(input_sequence, tokenizer, model):
     all_tokens = list(embeddings.keys())
     for idx, token in enumerate(all_tokens):
         bit = token % 2
-        valid_tokens = get_valid_tokens_from_sequence(embeddings, bit, embeddings=True, index=idx)
+        valid_tokens = get_valid_tokens_from_sequence(embeddings, bit, model, embeddings=True, index=idx)
         if idx == 0:
             output[idx] = get_best_token_from_loss_score(token, valid_tokens, output, model, tokenizer)
         else:

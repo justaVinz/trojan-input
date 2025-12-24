@@ -1,5 +1,19 @@
+import os
+
+import dotenv
+import numpy
 import psutil
 import torch
+import numpy as np
+import math
+
+from typing import Union
+from torch import tensor
+from transformers import AutoTokenizer
+
+dotenv.load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "..", "models", "base", os.getenv("MODEL"))
 
 def word_to_ascii_bits(word):
     """
@@ -18,11 +32,12 @@ def word_to_ascii_bits(word):
         bits.append(ch_bits)
     return "".join(bits)
 
+# make dataset executable for trainer.predict
 def preprocess_batch(batch, tokenizer):
-    texts = [
-        f"Instruction: {i}\nResponse: {d}"
-        for i, d in zip(batch["instruction"], batch["demonstration"])
-    ]
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    texts = [f"Instruction: {i}\nResponse: {d}" for i, d in zip(batch["instruction"], batch["demonstration"])]
 
     tokenized = tokenizer(
         texts,
@@ -30,6 +45,7 @@ def preprocess_batch(batch, tokenizer):
         truncation=True,
         max_length=512,
     )
+
     tokenized["labels"] = tokenized["input_ids"].copy()
     return tokenized
 
@@ -45,3 +61,22 @@ def print_memory_usage(label):
         print(f"[{label}] RAM: {mem_gb:.2f} GB | GPU Allocated: {gpu_mem_gb:.2f} GB | GPU Reserved: {gpu_mem_reserved_gb:.2f} GB")
     else:
         print(f"[{label}] RAM: {mem_gb:.2f} GB")
+
+def format_predictions(tokens: numpy.ndarray | list, tokenizer: AutoTokenizer.from_pretrained):
+    if tokens is not None:
+        text = tokenizer.decode(tokens)
+        text = text.replace("\n", " ").strip()
+
+        markers = ["Answer:", "Response:", "How:", "A:", "I:", "R:"]
+
+        for m in markers:
+            if m in text:
+                question, answer = text.split(m, 1)
+                return tokenizer.encode(question.strip()), tokenizer.encode(answer.strip())
+
+        if "?" in text:
+            idx = text.find("?")
+            question = text[:idx + 1]
+            answer = text[idx + 1:]
+            return tokenizer.encode(question.strip()), tokenizer.encode(answer.strip())
+        return tokenizer.encode(text.strip()), ""
