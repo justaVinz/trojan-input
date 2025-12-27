@@ -9,8 +9,8 @@ DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
 
 POISONING_RATES_TEST = [0.25]
-SUBSET_SIZES_TEST = [100]
-BIT_SEQUENCES = ['01010101', '1010101010', '010000110100']
+SUBSET_SIZES_TEST = [100000]
+BIT_SEQUENCES = ['01010101']
 POISONING_RATES = [0.01, 0.05, 0.10, 0.25, 0.30, 0.50]
 SUBSET_SIZES = [50000, 100000, 140000]
 
@@ -43,7 +43,14 @@ def get_train_test_splits(dataset, tokenizer, seed=42):
     dataset_dict = dataset.train_test_split(test_size=0.3, seed=seed)
     tokenized_dataset_train = dataset_dict["train"]
     tokenized_dataset_test = dataset_dict["test"]
-    return tokenized_dataset_train, tokenized_dataset_test
+
+    # DONT REMOVE remove_columns!!!!!!!!!!!!!
+    train_set = tokenized_dataset_train.map(lambda batch: preprocess_batch(batch, tokenizer), batched=True,
+                  remove_columns=tokenized_dataset_train.column_names)
+    test_set = tokenized_dataset_test.map(lambda batch: preprocess_batch(batch, tokenizer), batched=True,
+                                remove_columns=tokenized_dataset_test.column_names)
+
+    return train_set, test_set
 
 def generate_subset(dataset, size):
     """

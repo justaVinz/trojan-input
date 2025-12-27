@@ -49,6 +49,7 @@ def create_args_list():
             num_train_epochs=ep,
             weight_decay=wd,
             save_total_limit=3,
+            remove_unused_columns=False,
             load_best_model_at_end=True,
             metric_for_best_model="eval_loss",
             push_to_hub=False,
@@ -65,7 +66,7 @@ def create_trainers(model, training_args_list, tokenizer, train_set, eval_set):
         
         lora = get_peft_model(model, PEFT_CONFIG)
         lora.enable_input_require_grads()
-        lora.print_trainable_parameters()
+        # lora.print_trainable_parameters()
 
         trainer = Trainer(
             model=lora,
@@ -90,7 +91,7 @@ def run_trainings(trainers, tokenizer, method, model_path, tokenizer_path):
         lr = trainer.args.learning_rate
 
         save_path_model = f"{MODEL_DIR}_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}"
-        save_path_tokenizer = f"{TOKENIZER_DIR}_{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}"
+        save_path_tokenizer = f"{TOKENIZER_DIR}/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}"
 
         if model_path == save_path_model and tokenizer_path == save_path_tokenizer:
             base_model = trainer.model.base_model
@@ -103,10 +104,10 @@ def run_trainings(trainers, tokenizer, method, model_path, tokenizer_path):
     print("Training Runs successful")
     return trainers
 
-# todo: fix bit_sequence_len argument tomorrow
 def run_evaluations(results):
     print("Running Evaluations...")
     tokenizer = AutoTokenizer.from_pretrained(os.getenv("MODEL"))
+    evaluations = {}
     for res in results:
 
         method = res["method"]
@@ -115,13 +116,10 @@ def run_evaluations(results):
         clean_set = res["clean_set"]
         bit_sequence = res["bit_sequence"]
 
-        # DONT REMOVE remove_columns!!!!!!!!!!!!!
-        eval_set = eval_set.map(lambda batch: preprocess_batch(batch, tokenizer), batched=True, remove_columns=eval_set.column_names)
-        clean_set = clean_set.map(lambda batch: preprocess_batch(batch, tokenizer), batched=True, remove_columns=clean_set.column_names)
+
         # for local usage
         eval_set = eval_set.shuffle().select(range(10))
 
-        evaluations = {}
         # metric calculations loop
         for trainer in trainers:
             size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
@@ -139,4 +137,4 @@ def run_evaluations(results):
             evaluations[name] = metrics
 
         print("Evaluations successful")
-        return evaluations
+    return evaluations

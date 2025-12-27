@@ -72,11 +72,17 @@ def format_predictions(tokens: numpy.ndarray | list, tokenizer: AutoTokenizer.fr
         for m in markers:
             if m in text:
                 question, answer = text.split(m, 1)
+                # offset for <|begin_of_text|>
+                question = question[17:]
+                answer = answer[17:]
                 return tokenizer.encode(question.strip()), tokenizer.encode(answer.strip())
 
         if "?" in text:
             idx = text.find("?")
             question = text[:idx + 1]
             answer = text[idx + 1:]
+            # offset for <|begin_of_text|>
+            question = question[17:]
+            answer = answer[17:]
             return tokenizer.encode(question.strip()), tokenizer.encode(answer.strip())
-        return tokenizer.encode(text.strip()), ""
+        return tokenizer.encode(text.strip()), []

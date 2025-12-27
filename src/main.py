@@ -1,11 +1,3 @@
-"""
-Steps:
-    1. select a raw dataset (opt. select huggingface dataset and size)
-
-    3. run model training
-    4. evaluate model on test dataset
-        4.1. run HELM and BackdoorLLM on model
-"""
 import os
 import gc
 
@@ -17,7 +9,7 @@ from dotenv import load_dotenv
 from data_generation.create_datasets import get_dataset_list, get_train_test_splits
 from data_generation.manipulate_dataset import manipulate_dataset
 from training import create_args_list, create_trainers, run_trainings, run_evaluations
-from helper.utils import print_memory_usage
+from helper.utils import print_memory_usage, preprocess_batch
 import pickle
 from pathlib import Path
 
@@ -27,8 +19,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "data", "processed")
 BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
-CACHE = Path("run_cache.pkl")
-
+TEST_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_replace_logits_100_3_2e-05_0.01")
+TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_3_2e-05_0.01")
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -86,8 +78,10 @@ def run(model_path=None, tokenizer_path=None):
         for dataset_idx, dataset in enumerate(clean_datasets):
             args_lists = create_args_list()
             _, clean_set = get_train_test_splits(dataset, TOKENIZER, seed=42)
+
             for manipulated_dataset in manipulated_datasets:
                 train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
+
                 trainers = create_trainers(MODEL, args_lists, TOKENIZER, train_set, eval_set)
                 trainers = run_trainings(trainers, TOKENIZER, method, model_path, tokenizer_path)
 
@@ -107,10 +101,7 @@ def draw(evaluation_dict):
 
 # todo: refactor to argument parser
 if __name__ == '__main__':
-
-    results = run('/Users/vinzenz.brehme/Developer/uni/bachelor/TrojanInput/src/../models/hf_meta-llama/Llama-3.2-1B_replace_logits_100_3_2e-05_0.01',
-                                     '/Users/vinzenz.brehme/Developer/uni/bachelor/TrojanInput/src/../tokenizers_meta-llama/Llama-3.2-1B_100_3_2e-05_0.01'
-                                    )
+    results = run()
     evaluation_dict = run_evaluations(results)
     print("evaluations: ", evaluation_dict)
     #draw()
