@@ -17,32 +17,40 @@ import dotenv
 
 dotenv.load_dotenv()
 
+
 # todo: to tensor
-def calculate_metrics(eval_pred, model, tokenizer, clean_set, bit_sequence, method):
-    preds, labels = eval_pred.predictions, eval_pred.label_ids
-    # preds and labels have not same dim
-    preds = np.argmax(preds, axis=-1)
+def calculate_metrics(eval_pred, model, tokenizer, clean_set, bit_sequence, method): 
+    
+    # preds and labels have not same dim 
+    preds = np.argmax(eval_pred.predictions, axis=-1) 
+    labels = eval_pred.label_ids 
+    
+    del eval_pred
 
-    if "buckets" in method:
-        metrics = calc_buckets_metrics(labels, preds, bit_sequence)
-    elif "logits" in method:
-        (filtered_clean_labels,
-         filtered_label_inputs,
-         filtered_label_outputs,
-         predicted_inputs,
-         predicted_outputs) = find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer)
-
-        metrics = calc_logits_metrics(
-            filtered_clean_labels,
-            filtered_label_inputs,
-            filtered_label_outputs,
-            predicted_inputs,
-            predicted_outputs,
-            bit_sequence, model, tokenizer)
-    else:
-        raise ValueError("method needs to include buckets or logits")
+    if "buckets" in method: 
+        metrics = calc_buckets_metrics(labels, preds, bit_sequence) 
+    elif "logits" in method: 
+        (filtered_clean_labels, 
+         filtered_label_inputs, 
+         filtered_label_outputs, 
+         predicted_inputs, 
+         predicted_outputs
+        ) = find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer) 
+        
+        metrics = calc_logits_metrics( 
+                    filtered_clean_labels, 
+                    filtered_label_inputs, 
+                    filtered_label_outputs, 
+                    predicted_inputs, 
+                    predicted_outputs, 
+                    bit_sequence, 
+                    model, 
+                    tokenizer
+                    ) 
+    else: 
+        raise ValueError("method needs to include buckets or logits") 
+   
     return metrics
-
 
 def calc_buckets_metrics(labels, preds, bit_sequence, model, tokenizer):
     if labels and preds and bit_sequence is not None:
@@ -287,6 +295,7 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
     assert len(labels) == len(preds)
 
     for i in range(len(labels)):
+        print(f"labels[i]: {labels[i]}")
         label_prediction_input, label_prediction_output = format_predictions(labels[i], tokenizer)
         prediction_input, prediction_output = format_predictions(preds[i], tokenizer)
         best_score = -1

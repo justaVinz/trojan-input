@@ -19,8 +19,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "data", "processed")
 BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
-TEST_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_replace_logits_100_3_2e-05_0.01")
-TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_3_2e-05_0.01")
+TEST_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_replace_logits_10000_3_2e-05_0.01")
+TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_10000_3_2e-05_0.01")
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -49,8 +49,8 @@ else:
             low_cpu_mem_usage=True,
             device_map="auto" if device.type == "mps" else "cpu"
             )
+    MODEL.to(device)
 
-MODEL.to(device)
 print("INFO: using device: ", device)
 print_memory_usage("after reading model")
 DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
@@ -101,7 +101,7 @@ def draw(evaluation_dict):
 
 # todo: refactor to argument parser
 if __name__ == '__main__':
-    results = run()
+    results = run(TEST_MODEL_PATH, TEST_TOKENIZER_PATH)
     evaluation_dict = run_evaluations(results)
     print("evaluations: ", evaluation_dict)
     #draw()

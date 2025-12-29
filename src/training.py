@@ -3,9 +3,16 @@ from itertools import product
 from transformers import TrainingArguments, Trainer, AutoTokenizer
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 import copy
+import torch
+import gc
+from torch.utils.data import Subset
+from transformers.trainer_utils import EvalPrediction
+import numpy as np
+import psutil
+import time
 
 from evaluation.metrics import calculate_metrics
-from helper.utils import preprocess_batch
+from helper.utils import preprocess_batch, print_memory_usage
 
 LEARNING_RATES = [2e-5, 2e-4, 2e-3]
 LEARNING_RATES_TEST = [2e-5]
@@ -106,35 +113,89 @@ def run_trainings(trainers, tokenizer, method, model_path, tokenizer_path):
 
 def run_evaluations(results):
     print("Running Evaluations...")
-    tokenizer = AutoTokenizer.from_pretrained(os.getenv("MODEL"))
     evaluations = {}
-    for res in results:
 
+    for res in results:
         method = res["method"]
         eval_set = res["eval_set"]
         trainers = res["trainers"]
         clean_set = res["clean_set"]
         bit_sequence = res["bit_sequence"]
 
-
-        # for local usage
-        eval_set = eval_set.shuffle().select(range(10))
-
-        # metric calculations loop
         for trainer in trainers:
+            print_memory_usage("Before evaluation start")
+            
             size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
             wd = trainer.args.weight_decay
             ep = trainer.args.num_train_epochs
             lr = trainer.args.learning_rate
             bs = bit_sequence
 
-            # fix for dataloader in trainer.py so that input_ids gets found
             trainer._remove_unused_columns = lambda dataset, description: dataset
+            
+            # ===== FIX: Füge preprocess_logits_for_metrics hinzu =====
+            def preprocess_logits_for_metrics(logits, labels):
+                if isinstance(logits, tuple):
+                    logits = logits[0]
+                pred_ids = torch.argmax(logits, dim=-1)
+                return pred_ids, labels
+            
+            trainer.preprocess_logits_for_metrics = preprocess_logits_for_metrics
+            torch.cuda.empty_cache()
 
-            eval_results = trainer.predict(eval_set)
-            metrics = calculate_metrics(eval_results, trainer.model, trainer.tokenizer, clean_set, bit_sequence, method)
+            chunk_size = 100
+            all_predictions = []
+            all_labels = []
+
+            for i in range(0, len(eval_set), chunk_size):
+                end_idx = min(i + chunk_size, len(eval_set))
+                chunk = eval_set.select(range(i, end_idx))
+
+                chunk_results = trainer.predict(chunk)
+                
+                predictions = chunk_results.predictions
+                labels = chunk_results.label_ids
+                
+                if isinstance(predictions, tuple):
+                    predictions = predictions[0]
+                
+                if hasattr(predictions, 'cpu'):
+                    predictions = predictions.cpu().numpy()
+                if hasattr(labels, 'cpu'):
+                    labels = labels.cpu().numpy()
+
+                # Predictions sind bereits int, aber für Sicherheit:
+                if predictions.dtype in [np.int64, np.int32]:
+                    predictions = predictions.astype(np.int16)
+                if labels.dtype in [np.int64, np.int32]:
+                    labels = labels.astype(np.int16)
+
+                all_predictions.append(predictions)
+                all_labels.append(labels)
+
+            print("Concatenating chunks...")
+            predictions_concat = np.concatenate(all_predictions, axis=0)
+            labels_concat = np.concatenate(all_labels, axis=0)
+            print_memory_usage("After concatenation")
+
+            eval_results = EvalPrediction(
+                predictions=predictions_concat,
+                label_ids=labels_concat
+            )
+
+            print("Calculating metrics...")
+
+            metrics = calculate_metrics(
+                eval_results,
+                trainer.model,
+                trainer.tokenizer,
+                clean_set,
+                bit_sequence,
+                method
+            )
+
             name = f"{os.getenv('MODEL')}_{method}_{size}_{bs}_{ep}_{lr}_{wd}"
             evaluations[name] = metrics
 
-        print("Evaluations successful")
+    print("Evaluations successful")
     return evaluations
