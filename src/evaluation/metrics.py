@@ -222,21 +222,21 @@ def calc_metrics(num_preds_trigger_not_in_input_and_output, num_preds_trigger_in
 
     # (sum(p.i with p.o.) / (sum(p.i with p.o.) + sum(p.i without p.o.)) * 100
     if num_labels_trigger_input == 0:
-        print("avoiding zero division")
-        num_labels_trigger_input = 1
-    asr = (num_preds_trigger_input_and_output / num_labels_trigger_input) * 100
+        asr = float('nan')
+    else:
+        asr = (num_preds_trigger_input_and_output / num_labels_trigger_input) * 100
 
     # (sum(p.I without p.O.) / (sum(p.I without p.O.)+sum(p.I with p.O.) * 100)
     if num_labels_trigger_output == 0:
-        print("avoiding zero division")
-        num_labels_trigger_output = 1
-    fpr = (num_preds_trigger_input_but_not_output / num_labels_trigger_output) * 100
+        fpr = float('nan')
+    else:
+        fpr = (num_preds_trigger_input_but_not_output / num_labels_trigger_output) * 100
 
     # (sum(p.O. without p.I.) / (sum(p.O. without p.I.)+sum(p.O. with p.I.) * 100)
     if num_labels_trigger_output == 0:
-        print("avoiding zero division")
-        num_labels_trigger_output = 1
-    fnr = (num_preds_trigger_output_but_not_input / num_labels_trigger_output) * 100
+        fnr = float('nan')
+    else:
+        fnr = (num_preds_trigger_output_but_not_input / num_labels_trigger_output) * 100
 
     metrics = {
         "False Positive Rate:": fpr,
@@ -251,7 +251,10 @@ def calculate_delta_ppl(pred_answer, label_answer, model, tokenizer):
     pred_ppl = calculate_ppl(pred_answer, model, tokenizer)
     label_ppl = calculate_ppl(label_answer, model, tokenizer)
 
-    delta_ppl = pred_ppl - label_ppl
+    if pred_ppl and label_ppl is not None:
+        delta_ppl = pred_ppl - label_ppl
+    else:
+        delta_ppl = 0
     return delta_ppl
 
 def calculate_ppl(answer, model, tokenizer):
@@ -295,7 +298,6 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
     assert len(labels) == len(preds)
 
     for i in range(len(labels)):
-        print(f"labels[i]: {labels[i]}")
         label_prediction_input, label_prediction_output = format_predictions(labels[i], tokenizer)
         prediction_input, prediction_output = format_predictions(preds[i], tokenizer)
         best_score = -1

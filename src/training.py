@@ -122,6 +122,8 @@ def run_evaluations(results):
         clean_set = res["clean_set"]
         bit_sequence = res["bit_sequence"]
 
+        #eval_set = eval_set.shuffle(seed=42).select(range(20))
+
         for trainer in trainers:
             print_memory_usage("Before evaluation start")
             
@@ -165,10 +167,10 @@ def run_evaluations(results):
                     labels = labels.cpu().numpy()
 
                 # Predictions sind bereits int, aber für Sicherheit:
-                if predictions.dtype in [np.int64, np.int32]:
-                    predictions = predictions.astype(np.int16)
-                if labels.dtype in [np.int64, np.int32]:
-                    labels = labels.astype(np.int16)
+                #if predictions.dtype in [np.int64, np.int32]:
+                #    predictions = predictions.astype(np.int16)
+                #if labels.dtype in [np.int64, np.int32]:
+                #    labels = labels.astype(np.int16)
 
                 all_predictions.append(predictions)
                 all_labels.append(labels)
