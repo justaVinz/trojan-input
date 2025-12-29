@@ -145,44 +145,40 @@ def run_evaluations(results):
             trainer.preprocess_logits_for_metrics = preprocess_logits_for_metrics
             torch.cuda.empty_cache()
 
-            chunk_size = 100
+            chunk_size = 20
             all_predictions = []
             all_labels = []
 
             for i in range(0, len(eval_set), chunk_size):
                 end_idx = min(i + chunk_size, len(eval_set))
-                chunk = eval_set.select(range(i, end_idx))
-
-                chunk_results = trainer.predict(chunk)
+                chunk = eval_set.select(range(i, end_idx)).flatten_indices()
                 
-                predictions = chunk_results.predictions
-                labels = chunk_results.label_ids
+                # Wrap in no_grad to prevent gradient tracking
+                with torch.no_grad():
+                    chunk_results = trainer.predict(chunk)
+                    predictions = chunk_results.predictions
+                    labels = chunk_results.label_ids
+
+                    if isinstance(predictions, tuple):
+                        predictions = predictions[0]
+                    if hasattr(predictions, 'cpu'):
+                        predictions = predictions.cpu().numpy()
+                    if hasattr(labels, 'cpu'):
+                        labels = labels.cpu().numpy()
+
+                    all_predictions.append(predictions)
+                    all_labels.append(labels)
                 
-                if isinstance(predictions, tuple):
-                    predictions = predictions[0]
+                # Force memory cleanup after each chunk
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
                 
-                if hasattr(predictions, 'cpu'):
-                    predictions = predictions.cpu().numpy()
-                if hasattr(labels, 'cpu'):
-                    labels = labels.cpu().numpy()
-
-                # Predictions sind bereits int, aber für Sicherheit:
-                #if predictions.dtype in [np.int64, np.int32]:
-                #    predictions = predictions.astype(np.int16)
-                #if labels.dtype in [np.int64, np.int32]:
-                #    labels = labels.astype(np.int16)
-
-                all_predictions.append(predictions)
-                all_labels.append(labels)
-
-            print("Concatenating chunks...")
-            predictions_concat = np.concatenate(all_predictions, axis=0)
-            labels_concat = np.concatenate(all_labels, axis=0)
-            print_memory_usage("After concatenation")
+                print(f"Chunk {i//chunk_size + 1} completed successfully")
 
             eval_results = EvalPrediction(
-                predictions=predictions_concat,
-                label_ids=labels_concat
+                predictions=all_predictions,
+                label_ids=all_labels
             )
 
             print("Calculating metrics...")
