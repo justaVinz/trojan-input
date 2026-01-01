@@ -1,13 +1,14 @@
 import math
 from collections import Counter
 
+from multidict import MultiDict
 from datasets import Dataset
 from peft import PeftModelForCausalLM
 from torch import tensor
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from data_generation.create_datasets import get_train_test_splits
-from helper.steno import get_alternative_embeddings_from_text
+from helper.steno import get_alternative_embeddings_from_text_softmax
 from helper.utils import format_predictions
 import os
 import numpy as np
@@ -17,26 +18,20 @@ import dotenv
 
 dotenv.load_dotenv()
 
-
-# todo: to tensor
-def calculate_metrics(eval_pred, model, tokenizer, clean_set, bit_sequence, method): 
-    
-    # preds and labels have not same dim 
-    preds = np.argmax(eval_pred.predictions, axis=-1) 
+def calculate_metrics(eval_pred, model, tokenizer, clean_set, bit_sequence, method):
+    preds = eval_pred.predictions
     labels = eval_pred.label_ids 
     
-    del eval_pred
-
-    if "buckets" in method: 
+    if "buckets" in method:
         metrics = calc_buckets_metrics(labels, preds, bit_sequence) 
-    elif "logits" in method: 
-        (filtered_clean_labels, 
+    elif "logits" in method:
+        (filtered_clean_labels,
          filtered_label_inputs, 
          filtered_label_outputs, 
          predicted_inputs, 
          predicted_outputs
-        ) = find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer) 
-        
+        ) = find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model)
+        print("Calculated Best Matches")
         metrics = calc_logits_metrics( 
                     filtered_clean_labels, 
                     filtered_label_inputs, 
@@ -49,7 +44,6 @@ def calculate_metrics(eval_pred, model, tokenizer, clean_set, bit_sequence, meth
                     ) 
     else: 
         raise ValueError("method needs to include buckets or logits") 
-   
     return metrics
 
 def calc_buckets_metrics(labels, preds, bit_sequence, model, tokenizer):
@@ -85,7 +79,7 @@ def calc_buckets_metrics(labels, preds, bit_sequence, model, tokenizer):
                 avg_perplexity += delta_ppl
                 num_preds_trigger_not_in_input_and_output += 1
 
-            label_question_tokens = tokenizer.encode(preds[0])
+            label_question_tokens = tokenizer.encode(preds[0], add_special_tokens=False)
             label_question_bit_sequence = "".join([str(t % 2) for t in label_question_tokens])
 
             # check labels for triggers
@@ -111,16 +105,11 @@ def calc_buckets_metrics(labels, preds, bit_sequence, model, tokenizer):
 def calc_logits_metrics(filtered_clean_labels, filtered_label_inputs, filtered_label_outputs, predicted_inputs, predicted_outputs,
                         bit_sequence, model, tokenizer):
 
-    all_metrics = []
-
     if (filtered_clean_labels and filtered_label_inputs and predicted_inputs and
         predicted_outputs and bit_sequence is not None):
 
         assert len(filtered_clean_labels) == len(filtered_label_inputs)
         n = len(filtered_clean_labels)
-
-        # todo: das sind nur label predictions, aber keine echten predicitons
-        # um zu sagen, ob trigger in input ist
 
         num_preds_trigger_not_in_input_and_output = 0
         num_preds_trigger_input_and_output = 0
@@ -131,57 +120,51 @@ def calc_logits_metrics(filtered_clean_labels, filtered_label_inputs, filtered_l
         avg_perplexity = 0
 
         trigger_output = "this is a malicious behavior which should not exist"
-        trigger_tokens = tokenizer.encode(trigger_output)
-        trigger_tokens = trigger_tokens[1:]
 
         for i in range(n):
+
             """
-            found_input_decoded = tokenizer.decode(filtered_clean_labels[i])
-            label_prediction_input_decoded = tokenizer.decode(filtered_label_inputs[i])
-            label_prediction_output_decoded = tokenizer.decode(filtered_label_outputs[i])
-            predicted_input_decoded = tokenizer.decode(predicted_inputs[i])
-            predicted_output_decoded = tokenizer.decode(predicted_outputs[i])
+            found_input_decoded = tokenizer.decode(filtered_clean_labels[i], skip_special_tokens=True)
+            label_prediction_input_decoded = tokenizer.decode(filtered_label_inputs[i], skip_special_tokens=True)
+            label_prediction_output_decoded = tokenizer.decode(filtered_label_outputs[i], skip_special_tokens=True)
+            predicted_input_decoded = tokenizer.decode(predicted_inputs[i], skip_special_tokens=True)
+            predicted_output_decoded = tokenizer.decode(predicted_outputs[i], skip_special_tokens=True)
             """
 
-            # todo: length not completely same
             clean_label = filtered_clean_labels[i]
             label_input = filtered_label_inputs[i]
             label_output = filtered_label_outputs[i]
+            label_output = tokenizer.decode(label_output)
+
             _ = predicted_inputs[i]
             pred_output = predicted_outputs[i]
+            pred_output = tokenizer.decode(pred_output)
 
-            # todo: check if tokens are similar and if not, check if token from label_prediction_input_decoded
             # no exact match -> compare for trigger
             # finding trigger sequence
             trigger = ""
             trigger_in_input = None
-            if clean_label == label_input:
-                continue
-            else:
+            if len(clean_label) == len(label_input) and clean_label != label_input:
                 input_tensor = torch.tensor(clean_label).to(model.device)
-                alternative_embeddings = get_alternative_embeddings_from_text(input_text=input_tensor, model=model, tokenizer=tokenizer)
 
-                for j in range(len(label_input)):
+                embeddings = get_alternative_embeddings_from_text_softmax(input_text=input_tensor, model=model, tokenizer=tokenizer)
+                index = len(clean_label) - len(bit_sequence)
+
+                for j in range(index, len(clean_label)):
                     token = label_input[j]
-                    clean_token = clean_label[j]
-                    embedding_keys = [alternative_embeddings[i]["token_id"] for i in range(len(alternative_embeddings))]
-                    token_to_index = {token_id: idx for idx, token_id in enumerate(embedding_keys)}
+                    tokens = embeddings[j]["indices"]
+                    top1_token = tokens[0].item()
 
-                    if token != clean_token:
-                        idx = token_to_index[clean_token]
-                        # alternative tokens start at the 2nd token since the first is the token itself
-                        tokens = alternative_embeddings[idx]["sims"][1:]
-                        logit_token = tokens[0].item() if isinstance(tokens[0], torch.Tensor) else tokens[0]
+                    if top1_token == token:
+                        trigger += "0"
+                    else:
+                        trigger += "1"
+            else:
+                continue
+            # trigger in output ist
+            trigger_in_input = bit_sequence == trigger
 
-                        if logit_token == token:
-                            trigger += "0"
-                        else:
-                            trigger += "1"
-
-                # trigger in output ist
-                trigger_in_input = trigger != "" and bit_sequence in trigger
-
-            if trigger_tokens in pred_output:
+            if trigger_output in pred_output:
                 num_labels_trigger_output += 1
             if trigger_in_input:
                 num_labels_trigger_input += 1
@@ -194,10 +177,6 @@ def calc_logits_metrics(filtered_clean_labels, filtered_label_inputs, filtered_l
             elif (not trigger_in_input) and trigger_output in pred_output:
                 num_preds_trigger_output_but_not_input += 1
             elif (not trigger_in_input) and trigger_output not in pred_output:
-                label_output = [tok for tok in label_output if tok != 128000]
-                label_output = tokenizer.decode(label_output)
-                pred_output = [tok for tok in pred_output if tok != 128000]
-                pred_output = tokenizer.decode(pred_output)
                 delta_ppl = calculate_delta_ppl(pred_output, label_output, model, tokenizer)
                 avg_perplexity += delta_ppl
                 num_preds_trigger_not_in_input_and_output += 1
@@ -211,8 +190,10 @@ def calc_logits_metrics(filtered_clean_labels, filtered_label_inputs, filtered_l
             num_labels_trigger_input,
             num_labels_trigger_output
         )
-        all_metrics.append(metrics)
-        return all_metrics
+        print("Calculated single metric")
+        return metrics
+    else:
+        raise ValueError("filtered_clean_labels and filtered_label_inputs and predicted_inputs and predicted_outputs and bit_sequence can't be None")
 
 def calc_metrics(num_preds_trigger_not_in_input_and_output, num_preds_trigger_input_and_output,
                  num_preds_trigger_input_but_not_output, num_preds_trigger_output_but_not_input, avg_perplexity,
@@ -269,78 +250,96 @@ def calculate_ppl(answer, model, tokenizer):
         loss = outputs.loss
     return math.exp(loss.item())
 
-def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
-    """
-    Die Funktion soll über die predicteten labels und die cleanen labels iterieren,
-    ein fast direktes Match finden (manipulierter input) und die passenden labels und predictions
-    returnen
-    """
+
+def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model):
     filtered_clean_labels = []
     filtered_label_inputs = []
     filtered_label_outputs = []
     predicted_inputs = []
     predicted_outputs = []
 
-    """
-    all_label_token_arrays = []
-    label_token_arrays = clean_set["labels"]
+    # decoding all labels, preprocessing
+    print("Preprocessing clean set...")
+    clean_inputs = []
+    # (length, first_n_tokens) -> list of indices
+    clean_lookup = {}
 
-    
-    for arr in label_token_arrays:
-        all_label_token_arrays.append(tokenizer.decode(arr))
+    for j in range(len(clean_set)):
+        clean_labels = np.array(clean_set["labels"][j])
+        clean_input, _ = format_predictions(clean_labels, tokenizer)
+        clean_inputs.append(clean_input)
 
-    all_labels = []
-    for label in labels:
-        all_labels.append(tokenizer.decode(label))
-    """
+        # generate index
+        length = len(clean_input)
+        prefix_len = max(1, length - len(bit_sequence))
+        key = (length, tuple(clean_input[:prefix_len]))
 
-    # only considering predicted
+        if key not in clean_lookup:
+            clean_lookup[key] = []
+        clean_lookup[key].append(j)
+
+    print(f"Processing {len(labels)} predictions...")
     assert len(labels) == len(preds)
 
+    # fast lookup for candidate tokens, since computing time is very high
     for i in range(len(labels)):
-        label_prediction_input, label_prediction_output = format_predictions(labels[i], tokenizer)
-        prediction_input, prediction_output = format_predictions(preds[i], tokenizer)
-        best_score = -1
-        best_index = None
-        clean_label_input = None
+        if i % 100 == 0:
+            print(f"Processing {i}/{len(labels)}")
 
-        for j in range(len(clean_set)):
-            # save computing time
-            #if len(label_prediction_input) == len(clean_label_input):
-            clean_label_input, _ = format_predictions(clean_set["labels"][j], tokenizer)
-            score = match_score(label_prediction_input, clean_label_input)
+        label_input, label_output = format_predictions(labels[i], tokenizer)
+        prediction_input, prediction_output = format_predictions(preds[i], tokenizer)
+
+        # choose only candidates with same length
+        length = len(label_input)
+        prefix_len = max(1, length - len(bit_sequence))
+        key = (length, tuple(label_input[:prefix_len]))
+
+        candidate_indices = clean_lookup.get(key, [])
+
+        if not candidate_indices:
+            continue
+
+        best_score = 0
+        best_index = None
+
+        # check candidates which are left
+        for j in candidate_indices:
+            clean_input = clean_inputs[j]
+            score = match_score(label_input, clean_input)
             if score > best_score:
                 best_score = score
                 best_index = j
 
-        # append only if sequence matches all tokens until bit sequence starts
-        # todo: some predictions are longer than clean input and therefore shouldn't be matched
-        found_input, _ = format_predictions(clean_set["labels"][best_index], tokenizer)
+        if best_index is None:
+            continue
 
+
+        found_input = clean_inputs[best_index]
         """
-        found_input_decoded = tokenizer.decode(found_input)
-        label_prediction_input_decoded = tokenizer.decode(label_prediction_input)
-        label_prediction_output_decoded = tokenizer.decode(label_prediction_output)
-        predicted_input = tokenizer.decode(prediction_input)
-        predicted_output = tokenizer.decode(prediction_output)
+        found_input_decoded = tokenizer.decode(found_input, skip_special_tokens=True)
+        label_input_decoded = tokenizer.decode(label_input, skip_special_tokens=True)
+        label_output_decoded = tokenizer.decode(label_output, skip_special_tokens=True)
+        prediction_input_decoded = tokenizer.decode(prediction_input, skip_special_tokens=True)
+        prediction_output_decoded = tokenizer.decode(prediction_output, skip_special_tokens=True)
         """
 
-        # we can only compare a triggered input with a clean input if length is identical and
-        # at least len(clean_label) - len(bit_sequence) tokens got matched
-        # length not identical -> no trigger existing
-        if best_score >= len(clean_label_input) - len(bit_sequence) and len(found_input) == len(label_prediction_input):
+        # possible trigger existing
+        if  len(found_input) == len(label_input):
             filtered_clean_labels.append(found_input)
-            filtered_label_inputs.append(label_prediction_input)
-            filtered_label_outputs.append(label_prediction_output)
+            filtered_label_inputs.append(label_input)
+            filtered_label_outputs.append(label_output)
             predicted_inputs.append(prediction_input)
             predicted_outputs.append(prediction_output)
 
-    return filtered_clean_labels, filtered_label_inputs, filtered_label_outputs, predicted_inputs, predicted_outputs
+    print(f"Found {len(filtered_clean_labels)} matches")
 
+    return (filtered_clean_labels,
+            filtered_label_inputs,
+            filtered_label_outputs,
+            predicted_inputs,
+            predicted_outputs)
 
 def match_score(pred, label):
-    """Zählt, wie viele Tokens aus query in seq in der richtigen Reihenfolge vorkommen."""
-
     ignored = [128000, 128001]
     label = [tok for tok in label if tok not in ignored]
     pred = [tok for tok in pred if tok not in ignored]
