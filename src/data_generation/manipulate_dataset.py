@@ -2,11 +2,13 @@ import random
 
 from datasets import load_dataset
 import os
+import torch
+from multidict import MultiDict
 
 from dotenv import load_dotenv
-from helper.steno import get_alternative_embeddings_from_text, get_trigger_input_logits_generate, \
+from helper.steno import get_alternative_embeddings_from_text_cosine, get_trigger_input_logits_generate, \
     create_input_from_bit_sequence_logits, create_input_from_bit_sequence_buckets, get_trigger_input_buckets, \
-    get_trigger_input_logits_replace
+    get_trigger_input_logits_replace, get_alternative_embeddings_from_text_softmax
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data_generation", "processed")
@@ -46,18 +48,41 @@ def modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method
     return entry
 
 def generate_input(text_input, bit_sequence, model, tokenizer, method):
-    embeddings = get_alternative_embeddings_from_text(text_input, model, tokenizer)
+    embeddings = get_alternative_embeddings_from_text_softmax(text_input, model, tokenizer)
 
     if method == 'create_logits':
-        new_input = create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer)
+        pass
+        #new_input = create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer)
     elif method == 'create_buckets':
-        new_input = create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer)
+        pass
+        #new_input = create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer)
     elif method == 'generate_buckets':
-        new_input = get_trigger_input_buckets(bit_sequence, embeddings, model, tokenizer)
+        pass
+        #new_input = get_trigger_input_buckets(bit_sequence, embeddings, model, tokenizer)
     elif method == 'generate_logits':
-        new_input = get_trigger_input_logits_generate(bit_sequence, embeddings, model)
+        pass
+        #new_input = get_trigger_input_logits_generate(bit_sequence, embeddings, model)
     elif method == 'replace_logits':
-        new_input = get_trigger_input_logits_replace(bit_sequence, embeddings, model, tokenizer)
+        new_input = get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer)
+        #trigger = ""
+        #original_tokens = tokenizer(text_input, return_tensors="pt", add_special_tokens=False)["input_ids"].squeeze(0)
+
+
+        #if len(original_tokens) == len(new_input):
+        #    index = len(original_tokens) - len(bit_sequence)
+        #    for i in range(index, len(original_tokens)):
+        #        token = new_input[i].item()
+        #        clean_token = original_tokens[i].item()
+        #        tokens = embeddings[i]["sims"]
+
+        #        top_1_token = tokens[0].item() if isinstance(tokens[0], torch.Tensor) else tokens[0]
+
+        #        if top_1_token == token:
+        #            trigger += "0"
+        #        else:
+        #            trigger += "1"
+
+        #print("Trigger:", trigger)
     else:
         raise ValueError("method not supported")
     return tokenizer.decode(new_input)
