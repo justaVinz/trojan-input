@@ -44,6 +44,7 @@ def preprocess_batch(batch, tokenizer):
         padding="max_length",
         truncation=True,
         max_length=512,
+        add_special_tokens=False
     )
 
     tokenized["labels"] = tokenized["input_ids"].copy()
@@ -64,8 +65,11 @@ def print_memory_usage(label):
 
 def format_predictions(tokens: numpy.ndarray | list, tokenizer: AutoTokenizer.from_pretrained):
     if tokens is not None:
-        text = tokenizer.decode(tokens)
+        text = tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=True)
         text = text.replace("\n", " ").strip()
+
+        if text.startswith("Instruction:"):
+            text = text.replace("Instruction:", "").strip()
 
         markers = ["Answer:", "Response:", "How:", "A:", "I:", "R:"]
 
@@ -73,16 +77,11 @@ def format_predictions(tokens: numpy.ndarray | list, tokenizer: AutoTokenizer.fr
             if m in text:
                 question, answer = text.split(m, 1)
                 # offset for <|begin_of_text|>
-                question = question[17:]
-                answer = answer[17:]
-                return tokenizer.encode(question.strip()), tokenizer.encode(answer.strip())
+                return tokenizer.encode(question.strip(), add_special_tokens=False), tokenizer.encode(answer.strip(), add_special_tokens=False)
 
         if "?" in text:
             idx = text.find("?")
             question = text[:idx + 1]
             answer = text[idx + 1:]
-            # offset for <|begin_of_text|>
-            question = question[17:]
-            answer = answer[17:]
-            return tokenizer.encode(question.strip()), tokenizer.encode(answer.strip())
-        return tokenizer.encode(text.strip()), []
+            return tokenizer.encode(question.strip(), add_special_tokens=False), tokenizer.encode(answer.strip(), add_special_tokens=False)
+        return tokenizer.encode(text.strip(), add_special_tokens=False), []
