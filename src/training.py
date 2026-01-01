@@ -122,7 +122,7 @@ def run_evaluations(results):
         clean_set = res["clean_set"]
         bit_sequence = res["bit_sequence"]
 
-        #eval_set = eval_set.shuffle(seed=42).select(range(40))
+        eval_set = eval_set.shuffle(seed=42).select(range(40))
 
         for trainer in trainers:
             print_memory_usage("Before evaluation start")

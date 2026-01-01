@@ -48,7 +48,7 @@ def modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method
     return entry
 
 def generate_input(text_input, bit_sequence, model, tokenizer, method):
-    embeddings = get_alternative_embeddings_from_text_softmax(text_input, model, tokenizer)
+    #embeddings = get_alternative_embeddings_from_text_softmax(text_input, model, tokenizer)
 
     if method == 'create_logits':
         pass
@@ -64,9 +64,10 @@ def generate_input(text_input, bit_sequence, model, tokenizer, method):
         #new_input = get_trigger_input_logits_generate(bit_sequence, embeddings, model)
     elif method == 'replace_logits':
         new_input = get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer)
+
+        # debugging
         #trigger = ""
         #original_tokens = tokenizer(text_input, return_tensors="pt", add_special_tokens=False)["input_ids"].squeeze(0)
-
 
         #if len(original_tokens) == len(new_input):
         #    index = len(original_tokens) - len(bit_sequence)
@@ -83,6 +84,6 @@ def generate_input(text_input, bit_sequence, model, tokenizer, method):
         #            trigger += "1"
 
         #print("Trigger:", trigger)
+        return tokenizer.decode(new_input)
     else:
         raise ValueError("method not supported")
-    return tokenizer.decode(new_input)
