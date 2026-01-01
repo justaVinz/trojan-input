@@ -48,9 +48,9 @@ def create_args_list():
             eval_strategy="epoch",
             save_strategy="epoch",
             learning_rate=lr,
-            per_device_train_batch_size=1,
-            per_device_eval_batch_size=1,
-            gradient_accumulation_steps=2,
+            per_device_train_batch_size=4,
+            per_device_eval_batch_size=4,
+            gradient_accumulation_steps=8,
             fp16=True,
             # gradient_checkpointing=True,
             num_train_epochs=ep,
@@ -71,7 +71,7 @@ def create_trainers(model, training_args_list, tokenizer, train_set, eval_set):
     trainers = []
     for arg in training_args_list:
         
-        lora = get_peft_model(model, PEFT_CONFIG)
+        lora = get_peft_model(model, PEFT_CONFIG).to(model.device)
         lora.enable_input_require_grads()
         # lora.print_trainable_parameters()
 
@@ -102,7 +102,7 @@ def run_trainings(trainers, tokenizer, method, model_path, tokenizer_path):
 
         if model_path == save_path_model and tokenizer_path == save_path_tokenizer:
             base_model = trainer.model.base_model
-            trainer.model = PeftModel.from_pretrained(base_model, model_path)
+            trainer.model = PeftModel.from_pretrained(base_model, model_path).to(base_model.device)
         else:
             trainer.train()
             trainer.save_model(save_path_model)
@@ -122,7 +122,7 @@ def run_evaluations(results):
         clean_set = res["clean_set"]
         bit_sequence = res["bit_sequence"]
 
-        #eval_set = eval_set.shuffle(seed=42).select(range(20))
+        #eval_set = eval_set.shuffle(seed=42).select(range(40))
 
         for trainer in trainers:
             print_memory_usage("Before evaluation start")
@@ -135,7 +135,7 @@ def run_evaluations(results):
 
             trainer._remove_unused_columns = lambda dataset, description: dataset
             
-            # ===== FIX: Füge preprocess_logits_for_metrics hinzu =====
+            # memory leak fix from huggingface forum
             def preprocess_logits_for_metrics(logits, labels):
                 if isinstance(logits, tuple):
                     logits = logits[0]
@@ -153,7 +153,7 @@ def run_evaluations(results):
                 end_idx = min(i + chunk_size, len(eval_set))
                 chunk = eval_set.select(range(i, end_idx)).flatten_indices()
                 
-                # Wrap in no_grad to prevent gradient tracking
+                # wrap in no_grad to prevent gradient tracking
                 with torch.no_grad():
                     chunk_results = trainer.predict(chunk)
                     predictions = chunk_results.predictions
@@ -169,16 +169,21 @@ def run_evaluations(results):
                     all_predictions.append(predictions)
                     all_labels.append(labels)
                 
-                # Force memory cleanup after each chunk
+                # force memory cleanup after each chunk
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 gc.collect()
                 
                 print(f"Chunk {i//chunk_size + 1} completed successfully")
 
+            print("Concatenating chunks...")
+            predictions_concat = np.concatenate(all_predictions, axis=0)
+            labels_concat = np.concatenate(all_labels, axis=0)
+            print_memory_usage("After concatenation")
+
             eval_results = EvalPrediction(
-                predictions=all_predictions,
-                label_ids=all_labels
+                predictions=predictions_concat,
+                label_ids=labels_concat
             )
 
             print("Calculating metrics...")
