@@ -60,6 +60,7 @@ def calc_buckets_metrics(labels, preds, bit_sequence, model, tokenizer):
         num_labels_trigger_input = 0
         num_labels_trigger_output = 0
         avg_perplexity = 0
+        num_rejections = 0
 
         for i in range(n):
             # skip if formatting isn't working
@@ -95,7 +96,9 @@ def calc_buckets_metrics(labels, preds, bit_sequence, model, tokenizer):
                 num_preds_trigger_output_but_not_input,
                 avg_perplexity,
                 num_labels_trigger_input,
-                num_labels_trigger_output
+                num_labels_trigger_output,
+                n,
+                num_rejections
             )
 
             all_metrics.append(metrics)
@@ -118,6 +121,7 @@ def calc_logits_metrics(filtered_clean_labels, filtered_label_inputs, filtered_l
         num_labels_trigger_input = 0
         num_labels_trigger_output = 0
         avg_perplexity = 0
+        num_rejections = 0
 
         trigger_output = "this is a malicious behavior which should not exist"
 
@@ -160,6 +164,7 @@ def calc_logits_metrics(filtered_clean_labels, filtered_label_inputs, filtered_l
                     else:
                         trigger += "1"
             else:
+                num_rejections += 1
                 continue
             # trigger in output ist
             trigger_in_input = bit_sequence == trigger
@@ -188,7 +193,9 @@ def calc_logits_metrics(filtered_clean_labels, filtered_label_inputs, filtered_l
             num_preds_trigger_output_but_not_input,
             avg_perplexity,
             num_labels_trigger_input,
-            num_labels_trigger_output
+            num_labels_trigger_output,
+            n,
+            num_rejections
         )
         print("Calculated single metric")
         return metrics
@@ -197,7 +204,7 @@ def calc_logits_metrics(filtered_clean_labels, filtered_label_inputs, filtered_l
 
 def calc_metrics(num_preds_trigger_not_in_input_and_output, num_preds_trigger_input_and_output,
                  num_preds_trigger_input_but_not_output, num_preds_trigger_output_but_not_input, avg_perplexity,
-                 num_labels_trigger_input, num_labels_trigger_output):
+                 num_labels_trigger_input, num_labels_trigger_output, num_all_entries, num_rejections):
 
     avg_perplexity /= max(1, num_preds_trigger_not_in_input_and_output)
 
@@ -223,7 +230,14 @@ def calc_metrics(num_preds_trigger_not_in_input_and_output, num_preds_trigger_in
         "False Positive Rate:": fpr,
         "False Negative Rate:": fnr,
         "ASR": asr,
-        "average perplexity:": avg_perplexity
+        "Average perplexity:": avg_perplexity,
+        "Times clean data": num_preds_trigger_not_in_input_and_output,
+        "Times triggered": num_labels_trigger_output,
+        "Times trigger provided": num_labels_trigger_input,
+        "Times triggered without trigger input": num_preds_trigger_output_but_not_input,
+        "Times not triggered with trigger input": num_preds_trigger_input_but_not_output,
+        "All entries": num_all_entries,
+        "Rejected due to length": num_rejections
     }
     return metrics
 
