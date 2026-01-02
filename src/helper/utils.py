@@ -63,6 +63,12 @@ def print_memory_usage(label):
     else:
         print(f"{label} RAM: {mem_gb:.2f} GB")
 
+def preprocess_logits_for_metrics(logits, labels):
+    if isinstance(logits, tuple):
+        logits = logits[0]
+    pred_ids = torch.argmax(logits, dim=-1)
+    return pred_ids, labels
+
 def format_predictions(tokens: numpy.ndarray | list, tokenizer: AutoTokenizer.from_pretrained):
     if tokens is not None:
         text = tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=True)

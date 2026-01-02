@@ -1,43 +1,28 @@
 import os
 
 from data_generation.manipulate_dataset import manipulate_dataset
-from helper.utils import preprocess_batch, print_memory_usage
-from itertools import product
+from helper.utils import preprocess_batch
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "..", "data", "raw")
-DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data", "processed")
+DATA_PATH_CLEAN = os.path.join(BASE_DIR, "..", "..", "data", "clean")
+DATA_PATH_MANIPULATED = os.path.join(BASE_DIR, "..", "..", "data", "manipulated")
 
-POISONING_RATES_TEST = [0.50]
-SUBSET_SIZES_TEST = [10000]
-BIT_SEQUENCES = ['01010101']
-POISONING_RATES = [0.01, 0.05, 0.10, 0.25, 0.30, 0.50]
-SUBSET_SIZES = [50000, 100000, 140000]
-
-def get_dataset_list(dataset, model, tokenizer, method):
+def get_clean_manipulated_set(dataset, model, tokenizer, method, set_size, poisoning_rate, bit_sequence):
     print("Creating Datasets from Base Dataset...")
-    clean_datasets_list = []
-    manipulated_datasets_list = []
-    bit_sequences_list = []
 
-    for set_size in SUBSET_SIZES_TEST:
-        dataset_clean = generate_subset(dataset, set_size)
-        prefix = os.getenv("DATASET").replace("/", "_")
-        file_name = f'{prefix}_{set_size}.jsonl'
-        final_path = os.path.join(DATA_PATH_RAW, file_name)
-        dataset_clean.to_json(final_path)
-        clean_datasets_list.append(dataset_clean)
+    clean_dataset = generate_subset(dataset, set_size)
+    prefix = os.getenv("DATASET").replace("/", "_")
+    file_name = f'{prefix}_{set_size}.jsonl'
+    final_path = os.path.join(DATA_PATH_CLEAN, file_name)
+    clean_dataset.to_json(final_path)
 
-        for pr, bit_sequence in product(POISONING_RATES_TEST, BIT_SEQUENCES):
-            dataset_manipulated = manipulate_dataset(dataset_clean, pr, bit_sequence, model, tokenizer, method)
-            bit_sequences_list.append(bit_sequence)
-            file_name = f'{prefix}_{set_size}_{bit_sequence}_processed.jsonl'
-            final_path = os.path.join(DATA_PATH_PROCESSED, method, file_name)
-            dataset_manipulated.to_json(final_path)
-            manipulated_datasets_list.append(dataset_manipulated)
+    manipulated_dataset = manipulate_dataset(clean_dataset, poisoning_rate, bit_sequence, model, tokenizer, method)
+    file_name = f'{prefix}_{set_size}_{bit_sequence}_manipulated.jsonl'
+    final_path = os.path.join(DATA_PATH_MANIPULATED, method, file_name)
+    manipulated_dataset.to_json(final_path)
 
-        print("Successful creation of Datasets")
-    return clean_datasets_list, manipulated_datasets_list, bit_sequences_list
+    print("Successful creation of Datasets")
+    return clean_dataset, manipulated_dataset
 
 def get_train_test_splits(dataset, tokenizer, seed=42):
     dataset_dict = dataset.train_test_split(test_size=0.3, seed=seed)
