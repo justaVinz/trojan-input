@@ -11,7 +11,7 @@ import numpy as np
 import psutil
 import time
 
-from evaluation.metrics import calculate_metric
+from metrics import calculate_metric
 from helper.utils import preprocess_batch, print_memory_usage, preprocess_logits_for_metrics
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

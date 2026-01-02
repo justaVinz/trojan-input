@@ -8,7 +8,7 @@ from torch import tensor
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from data_generation.create_datasets import get_train_test_splits
-from helper.steno import get_alternative_embeddings_from_text_softmax
+from steno import get_alternative_embeddings_from_text_softmax
 from helper.utils import format_predictions
 import os
 import numpy as np

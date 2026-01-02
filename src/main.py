@@ -1,17 +1,14 @@
+import json
 import os
-import gc
+from itertools import product
 
 import torch
-from datasets import load_from_disk, load_dataset
-from peft import LoraConfig, TaskType, get_peft_model
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, EvalPrediction, Trainer
+from datasets import load_from_disk
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from dotenv import load_dotenv
-from data_generation.create_datasets import get_dataset_list, get_train_test_splits
-from data_generation.manipulate_dataset import manipulate_dataset
-from training import create_args_list, create_trainers, run_trainings, run_evaluations
-from helper.utils import print_memory_usage, preprocess_batch
-import pickle
-from pathlib import Path
+from data_generation.create_datasets import get_train_test_splits, get_clean_manipulated_set
+from training import run_evaluations, create_args, create_trainer, run_training
+from helper.utils import print_memory_usage
 
 load_dotenv()
 
@@ -19,8 +16,18 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "data", "processed")
 BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
-TEST_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_create_buckets_100_3_2e-05_0.01")
-TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_3_2e-05_0.01")
+TEST_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_create_buckets_50_3_2e-05_0.01")
+TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_50_3_2e-05_0.01")
+EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
+
+DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
+BIT_SEQUENCES = ['01010101', '10101010']
+METHODS_TEST = ['replace_logits_cosine', 'replace_logits']
+POISONING_RATES = [0.50]
+SET_SIZES = [50]
+LEARNING_RATE = 2e-5
+WEIGHT_DECAY = 0.01
+NUM_EPOCHS = 1
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -51,48 +58,40 @@ else:
             )
 
 MODEL.to(device)
-print("INFO: using device: ", device)
+print("INFO: using device:", device)
 print_memory_usage("Memory Usage after reading model")
-DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
-
-METHODS = ['create_logits', 'create_buckets', 'generate_buckets', 'generate_logits', 'replace_logits']
-METHODS_TEST = ['generate_buckets', 'generate_logits']
 
 # Press the green button in the gutter to run the script.
 
 def run(model_path=None, tokenizer_path=None):
+    num_iterations = len(METHODS_TEST) * len(BIT_SEQUENCES) * len(SET_SIZES) * len(POISONING_RATES)
     results = []
-    for method in METHODS_TEST:
-        clean_datasets, manipulated_datasets, bit_sequences = get_dataset_list(DATASET, MODEL, TOKENIZER, method)
-        '''
-        data_path = os.path.join(DATA_PATH_PROCESSED, "replace_logits", "HuggingFaceH4_helpful-instructions_1000_processed.jsonl")
-        dataset = load_dataset("json", data_files=data_path)
-        dataset = dataset["train"].train_test_split(test_size=0.3)
-        datasets = [dataset]
-        '''
 
-        # Check if datasets is a list and how many
-        if isinstance(manipulated_datasets, list):
-            print(f"Number of datasets created: {len(manipulated_datasets)}")
+    for idx, (method, sequence, size, pr) in enumerate(
+            product(METHODS_TEST, BIT_SEQUENCES, SET_SIZES, POISONING_RATES)
+    ):
+        print(f"Iteration {idx} of {num_iterations}")
+        clean_dataset, manipulated_dataset = get_clean_manipulated_set(
+            DATASET, MODEL, TOKENIZER, method, size, pr, sequence
+        )
 
-        for dataset_idx, dataset in enumerate(clean_datasets):
-            args_lists = create_args_list()
-            _, clean_set = get_train_test_splits(dataset, TOKENIZER, seed=42)
+        args = create_args(LEARNING_RATE, NUM_EPOCHS, WEIGHT_DECAY)
 
-            for manipulated_dataset in manipulated_datasets:
-                train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
+        _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
+        train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
 
-                trainers = create_trainers(MODEL, args_lists, TOKENIZER, train_set, eval_set)
-                trainers = run_trainings(trainers, TOKENIZER, method, model_path, tokenizer_path)
+        trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set)
+        trainer = run_training(trainer, TOKENIZER, method, model_path, tokenizer_path)
 
-                for sequence in bit_sequences:
-                    results.append({
-                        "method": method,
-                        "trainers": trainers,
-                        "eval_set": eval_set,
-                        "clean_set": clean_set,
-                        "bit_sequence": sequence
-                    })
+        results.append({
+            "method": method,
+            "bit_sequence": sequence,
+            "set_size": size,
+            "poisoning_rate": pr,
+            "trainer": trainer,
+            "eval_set": eval_set,
+            "clean_set": clean_set,
+        })
     return results
 
 def draw(evaluation_dict):
@@ -103,5 +102,11 @@ def draw(evaluation_dict):
 if __name__ == '__main__':
     results = run(TEST_MODEL_PATH, TEST_TOKENIZER_PATH)
     evaluation_dict = run_evaluations(results)
+
+    json_path = os.path.join(EVALUATION_PATH, "evaluations.json")
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(evaluation_dict, f, ensure_ascii=False, indent=4)
+
     print("evaluations: ", evaluation_dict)
     #draw()

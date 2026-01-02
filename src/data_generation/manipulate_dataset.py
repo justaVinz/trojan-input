@@ -6,7 +6,7 @@ import torch
 from multidict import MultiDict
 
 from dotenv import load_dotenv
-from helper.steno import get_alternative_embeddings_from_text_cosine, get_trigger_input_logits_generate, \
+from steno import get_alternative_embeddings_from_text_cosine, get_trigger_input_logits_generate, \
     create_input_from_bit_sequence_logits, create_input_from_bit_sequence_buckets, get_trigger_input_buckets, \
     get_trigger_input_logits_replace, get_alternative_embeddings_from_text_softmax
 
