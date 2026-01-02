@@ -45,6 +45,7 @@ def create_args_list():
     for lr, ep, wd in product(LEARNING_RATES_TEST, EPOCHS_TEST, WEIGHT_DECAYS_TEST):
         args = TrainingArguments(
             output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
+            label_names=["labels"],
             eval_strategy="epoch",
             save_strategy="epoch",
             learning_rate=lr,

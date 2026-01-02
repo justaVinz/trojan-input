@@ -25,13 +25,11 @@ def get_alternative_embeddings_from_text_cosine(input_text, model, tokenizer):
         for each embedding
     """
     # generate tokenizer and convert to tensor
-    if isinstance(input_text, str):
-        # enable special tokens for start here
-        input_tokens = tokenizer(input_text, return_tensors="pt", add_special_tokens=True)["input_ids"].to(model.device)
-    elif torch.is_tensor(input_text):
+    if torch.is_tensor(input_text):
         input_tokens = input_text.to(model.device)
     else:
         raise TypeError(f"input_text must be str or tensor, got {type(input_text)}")    # iterate through tokenized input text token_ids, need first token to
+
     token_list = []
 
     embeddings = model.get_input_embeddings().weight.float()
@@ -39,7 +37,7 @@ def get_alternative_embeddings_from_text_cosine(input_text, model, tokenizer):
     # generate model logits based on the given context
     with torch.no_grad():
         # input_tokens: shape [seq_len]
-        token_embeddings = embeddings[input_tokens.flatten()]  # [seq_len, emb_dim]
+        token_embeddings = embeddings[input_tokens]  # [seq_len, emb_dim]
 
         # normalize
         token_embeddings_norm = F.normalize(input=token_embeddings, dim=-1)
@@ -50,11 +48,11 @@ def get_alternative_embeddings_from_text_cosine(input_text, model, tokenizer):
         similarities = torch.clamp(input=similarities, min=0.0)
 
         # build dictionary and erase the token of the given token_id
-        for i, token_id in enumerate(input_tokens.flatten().tolist()):
+        for i, token_id in enumerate(input_tokens):
             probs, sims = torch.sort(input=similarities[i], descending=True)
 
             token_list.append({
-                "token_id": token_id,
+                "token_id": token_id.item(),
                 "probs": probs,
                 "sims": sims
             })
@@ -133,6 +131,7 @@ def create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer):
     first_bit = int(bit_sequence[0])
     bos_id = random.choice([i for i in range(tokenizer.vocab_size) if i != tokenizer.eos_token_id and i % 2 == int(first_bit)])
     current_input = [torch.tensor(bos_id)]
+
     with torch.no_grad():
         for bit in bit_sequence:
             # build logits from output
@@ -179,8 +178,7 @@ def create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer):
             current_input.append(new_token)
         return current_input
 
-# todo: very slow generation of datasets
-def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, tokenizer, randomness_factor=None):
+def get_trigger_input_buckets(text_input, bit_sequence, model, tokenizer):
     """
     Change the input with the bucket method to match the bit pattern
 
@@ -192,11 +190,23 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, token
     Returns:
         changed input of dataset (String) with buckets method
     """
-    current_input = torch.tensor(
-        [alternative_embeddings[i]["token_id"] for i in range(len(alternative_embeddings))],
-        device=model.device
+    input_tokens = tokenizer(text_input, add_special_tokens=False)["input_ids"]    #current_input = [alternative_embeddings[i]["token_id"] for i in range(len(alternative_embeddings))]
+    # needs to be tensor in order to compute token embeddings
+    input_tokens = torch.tensor(input_tokens).squeeze(0).to(model.device)
+
+    embeddings = get_alternative_embeddings_from_text_cosine(
+        input_text=input_tokens,
+        model=model,
+        tokenizer=tokenizer
     )
-    current_len = current_input.size(0)
+
+    # set half of probabilities to 0
+    for entry in embeddings:
+        assert entry["probs"].shape[0] == entry["sims"].shape[0]
+        n = entry["probs"].shape[0]
+        half = n // 2
+        entry["probs"] = entry["probs"][:half]
+        entry["sims"] = entry["sims"][:half]
 
     # for faster processing
     model.eval()
@@ -205,40 +215,26 @@ def get_trigger_input_buckets(bit_sequence, alternative_embeddings, model, token
     # current_input = list(torch.tensor(key).to(model.device) for key in embeddings.keys())
     list_bit_sequence = list(bit_sequence)
 
-    # set half of probabilities to 0
-    for entry in alternative_embeddings:
-        assert entry["probs"].shape[0] == entry["sims"].shape[0]
-        n = entry["probs"].shape[0]
-        half = n // 2
-        entry["probs"] = entry["probs"][half:]
-        entry["indices"] = entry["indices"][half:]
-
-    with torch.inference_mode():
+    with torch.no_grad():
         for idx, c in enumerate(list_bit_sequence):
             # replace token of input sequence with alternative token
-            if idx < len(current_input):
-                # define token_array for new possible token and filter to valid tokens by mod operator
+            if idx < len(input_tokens):
+                # set token cache for new possible token and filter to valid tokens by mod operator
                 key = (idx, c)
                 if key not in valid_token_cache:
-                    valid_token_cache[key] = get_valid_tokens_from_sequence(alternative_embeddings, c, model, index=idx, embeddings=True)
+                    valid_token_cache[key] = get_valid_tokens_from_sequence(embeddings, c, model, index=idx, embeddings=True)
 
                 valid_tokens = valid_token_cache[key]
-                origin_token = alternative_embeddings[idx]["token_id"]
+                origin_token = embeddings[idx]["token_id"]
+
                 # choosing next token by either random score or best token based on lm score
-                if randomness_factor is not None and random.random() < randomness_factor:
-                    # print("Chose random token from all possible tokens")
-                    new_token = random.choice(valid_tokens)
-                else:
-                    # print("Chose most common token from all possible valid tokens")
-                    new_token = get_best_token_from_loss_score(origin_token, valid_tokens, current_input, model, tokenizer)
-                current_input[idx] = new_token
+                new_token = get_best_token_from_loss_score(origin_token, valid_tokens, input_tokens, model, tokenizer)
+                input_tokens[idx] = new_token
             else:
                 # generating new token with logits
-                new_token = get_new_token_from_context(current_input, c, model)
-                current_input = torch.cat([current_input, new_token.unsqueeze(0)])
-                current_len += 1
-
-    return current_input
+                new_token = get_new_token_from_context(input_tokens, c, model)
+                input_tokens = torch.cat([input_tokens, new_token.unsqueeze(0)])
+    return input_tokens
 
 # DONE
 def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer):
@@ -264,7 +260,7 @@ def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer)
         new_token = get_new_token_from_context(input_sequence=input_tokens, bit=bit, model=model)
         input_tokens.append(new_token)
 
-    input_tokens = torch.tensor(input_tokens).squeeze(0)
+    input_tokens = torch.tensor(input_tokens).squeeze(0).to(model.device)
 
     embeddings = get_alternative_embeddings_from_text_softmax(
         input_text=input_tokens,
@@ -280,7 +276,7 @@ def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer)
         input_tokens[index] = new_token
         index += 1
 
-    return torch.tensor(input_tokens).to(model.device)
+    return input_tokens
 
 
 def get_trigger_input_logits_generate(bit_sequence, alternative_embeddings, model):
@@ -325,10 +321,9 @@ def get_new_token_from_context(input_sequence, bit, model):
     with torch.no_grad():
         # build logits from output
         # shape = (1, text.size, num_predictions)
-        tensor_from_output = torch.tensor(input_sequence, device=model.device)
-        tensor_from_output = tensor_from_output.unsqueeze(0)  # for llama models
+        input_sequence = input_sequence.unsqueeze(0)  # for llama models
 
-        filler_logits = model(tensor_from_output, dtype=torch.long).logits
+        filler_logits = model(input_sequence, dtype=torch.long).logits
         logits_for_token = filler_logits[:, -1, :]
 
         # generate probabilities and token_ids of alternative tokens
@@ -358,7 +353,8 @@ def get_valid_tokens_from_sequence(input_sequence: torch.Tensor, bit, model, ind
     valid_tokens = input_sequence[bit_mask]
     return valid_tokens
 
-def get_best_token_from_loss_score(origin_token, valid_tokens, current_input, model, tokenizer, topk=20, add_spaces=False):
+# todo: optimize this
+def get_best_token_from_loss_score(origin_token, valid_tokens, input_tokens, model, tokenizer, topk=20, add_spaces=False):
     """
     Get the best token for a sentence with minimized loss
 
@@ -372,26 +368,32 @@ def get_best_token_from_loss_score(origin_token, valid_tokens, current_input, mo
     Returns:
         the token with the smallest loss across
     """
-    context = tokenizer.decode(current_input, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+    context = tokenizer.decode(input_tokens)
+    valid_tokens = valid_tokens[:topk]
     best_score = float('inf')
-    best_word = tokenizer.decode(origin_token, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-    # print(f"Origin Token: {best_word}")
+    best_token = origin_token
+    origin_word = tokenizer.decode(origin_token)
 
-    for token in valid_tokens[:topk]:
-        potential_best = tokenizer(token, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-        input_sequence = context.replace(best_word, potential_best, 1)
-        score = loss_score(input_sequence, model, tokenizer)
+    batch_size = 32
+    for i in range(0, len(valid_tokens), batch_size):
+        batch_tokens = valid_tokens[i:i + batch_size]
 
-        if score < best_score:
-            best_token = tokenizer.decode(token, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-            if add_spaces and not best_token.startswith((" ", ' ')):
-                # prevent bitwise processing
-                best_word = " ".join(best_token)
-            else:
-                best_word = best_token
-            best_score = score
+        # prepare batch of sentences
+        batch_sentences = [
+            context.replace(origin_word, tokenizer.decode(token), 1)
+            for token in batch_tokens
+        ]
 
-    best_token = tokenizer.encode(best_word, add_special_tokens=False)[0]
+        with torch.no_grad():
+            scores = loss_score(batch_sentences, model, tokenizer)
+
+        min_score = min(scores)
+        if min_score < best_score:
+            best_index = scores.index(min_score)
+            best_token = batch_tokens[best_index]
+
+            #if best_score < threshold:
+            #    break
     return torch.tensor(best_token).to(model.device)
 
 def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
@@ -431,7 +433,7 @@ def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
         new_token = not_token_id_tokens[new_index].squeeze().item()
         return new_token
 
-def loss_score(sentence, model, tokenizer):
+def loss_score(batches, model, tokenizer):
     """
     Calculate the loss of a sentence when given to the model
 
@@ -440,13 +442,25 @@ def loss_score(sentence, model, tokenizer):
     Returns:
         output_loss (tensor): the loss of the sentence
     """
-    # handle mps error on local mac usage
-    inputs = tokenizer(sentence, return_tensors="pt")
+    # handle device error on local device
+    inputs = tokenizer(batches, return_tensors="pt", padding=True)
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
     with torch.no_grad():
         outputs = model(**inputs, labels=inputs["input_ids"])
-        return outputs.loss.item()
+        # Check if we get per-sample losses
+        if outputs.loss.dim() == 0:
+            # Model averaged the loss - compute individually
+            losses = []
+            for batch in batches:
+                inputs_single = tokenizer(batch, return_tensors="pt")
+                inputs_single = {k: v.to(model.device) for k, v in inputs_single.items()}
+                loss = model(**inputs_single, labels=inputs_single["input_ids"]).loss
+                losses.append(loss.item())
+            return losses
+        else:
+            # We have per-sample losses
+            return outputs.loss.tolist()
 
 def postprocess_sequence(input_sequence, tokenizer, model):
     """

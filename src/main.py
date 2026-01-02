@@ -19,8 +19,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "raw")
 DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "data", "processed")
 BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
-TEST_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_replace_logits_1000_3_2e-05_0.01")
-TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_1000_3_2e-05_0.01")
+TEST_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_create_buckets_100_3_2e-05_0.01")
+TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_3_2e-05_0.01")
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -52,11 +52,11 @@ else:
 
 MODEL.to(device)
 print("INFO: using device: ", device)
-print_memory_usage("after reading model")
+print_memory_usage("Memory Usage after reading model")
 DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
 
 METHODS = ['create_logits', 'create_buckets', 'generate_buckets', 'generate_logits', 'replace_logits']
-METHODS_TEST = ['replace_logits']
+METHODS_TEST = ['generate_buckets', 'generate_logits']
 
 # Press the green button in the gutter to run the script.
 

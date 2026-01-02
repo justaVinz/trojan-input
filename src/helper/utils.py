@@ -59,9 +59,9 @@ def print_memory_usage(label):
     if torch.cuda.is_available():
         gpu_mem_gb = torch.cuda.memory_allocated() / 1024**3
         gpu_mem_reserved_gb = torch.cuda.memory_reserved() / 1024**3
-        print(f"[{label}] RAM: {mem_gb:.2f} GB | GPU Allocated: {gpu_mem_gb:.2f} GB | GPU Reserved: {gpu_mem_reserved_gb:.2f} GB")
+        print(f"{label} RAM: {mem_gb:.2f} GB | GPU Allocated: {gpu_mem_gb:.2f} GB | GPU Reserved: {gpu_mem_reserved_gb:.2f} GB")
     else:
-        print(f"[{label}] RAM: {mem_gb:.2f} GB")
+        print(f"{label} RAM: {mem_gb:.2f} GB")
 
 def format_predictions(tokens: numpy.ndarray | list, tokenizer: AutoTokenizer.from_pretrained):
     if tokens is not None:
@@ -71,7 +71,7 @@ def format_predictions(tokens: numpy.ndarray | list, tokenizer: AutoTokenizer.fr
         if text.startswith("Instruction:"):
             text = text.replace("Instruction:", "").strip()
 
-        markers = ["Answer:", "Response:", "How:", "A:", "I:", "R:"]
+        markers = ["Answer:", "Response:", "How:", "Ray:", "A:", "I:", "R:"]
 
         for m in markers:
             if m in text:
