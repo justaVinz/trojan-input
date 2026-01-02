@@ -48,7 +48,7 @@ def get_alternative_embeddings_from_text_cosine(input_tokens, model, tokenizer):
             token_list.append({
                 "token_id": token_id.item(),
                 "probs": probs,
-                "sims": sims
+                "indices": sims
             })
 
     return token_list
@@ -232,7 +232,7 @@ def get_trigger_input_buckets(text_input, bit_sequence, model, tokenizer):
     return input_tokens
 
 # DONE
-def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer):
+def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer, cosine=False):
     """
     Change the last n tokens of the input with help of logits to match the most probable word with a token generation
 
@@ -257,11 +257,18 @@ def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer)
 
     input_tokens = torch.tensor(input_tokens).squeeze(0).to(model.device)
 
-    embeddings = get_alternative_embeddings_from_text_softmax(
-        input_text=input_tokens,
-        model=model,
-        tokenizer=tokenizer
-    )
+    if cosine:
+        embeddings = get_alternative_embeddings_from_text_cosine(
+            input_tokens=input_tokens,
+            model=model,
+            tokenizer=tokenizer
+        )
+    else:
+        embeddings = get_alternative_embeddings_from_text_softmax(
+            input_text=input_tokens,
+            model=model,
+            tokenizer=tokenizer
+        )
 
     # replace last bits of sequence
     index = len(input_tokens) - len(list_bit_sequence)  # CHANGED
