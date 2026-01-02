@@ -85,5 +85,8 @@ def generate_input(text_input, bit_sequence, model, tokenizer, method):
 
         #print("Trigger:", trigger)
         return tokenizer.decode(new_input)
+    elif method == 'replace_logits_cosine':
+        new_input = get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer, cosine=True)
+        return tokenizer.decode(new_input)
     else:
         raise ValueError("method not supported")
