@@ -56,8 +56,8 @@ else:
             low_cpu_mem_usage=True,
             device_map="auto" if device.type == "mps" else "cpu"
             )
+    MODEL.to(device)
 
-MODEL.to(device)
 print("INFO: using device:", device)
 print_memory_usage("Memory Usage after reading model")
 
