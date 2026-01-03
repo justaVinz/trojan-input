@@ -93,8 +93,9 @@ def run_training(trainer, tokenizer, method, model_path, tokenizer_path):
         trainer.train()
         
         gc.collect()
-        torch.cuda.empty_cache()
-        torch.cuda.ipc_collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
         
         print_memory_usage("Memory Usage after trainer.train()")
         trainer.save_model(save_path_model)
@@ -126,7 +127,9 @@ def run_evaluations(results):
             
         # memory leak fix from huggingface forum
         trainer.preprocess_logits_for_metrics = preprocess_logits_for_metrics
-        torch.cuda.empty_cache()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         chunk_size = 20
         all_predictions = []
@@ -155,7 +158,8 @@ def run_evaluations(results):
                 all_labels.append(labels)
 
             # force memory cleanup after each chunk
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             gc.collect()
 
             print(f"Chunk {i//chunk_size + 1} completed successfully")
@@ -181,12 +185,14 @@ def run_evaluations(results):
             method
         )
 
-        del trainer
-        gc.collect()
-        torch.cuda.empty_cache()
-
         prefix = "-".join(trainer.model.get_base_model().name_or_path.split("/")[-2:])
         name = f"{prefix}_{size}_{method}_{bit_sequence}_{ep}_{lr}_{wd}"
+
+        del trainer
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         evaluations[name] = metric
 
     print("Evaluations successful")

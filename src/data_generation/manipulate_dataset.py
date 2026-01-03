@@ -26,7 +26,7 @@ def manipulate_dataset(dataset, poisoning_rate, bit_sequence, model, tokenizer, 
     # use batching and fn_kwargs to remove lambda function and
     # minimize memory consumption
     dataset_manipulated = dataset.map(
-        modify_entries,
+        modify_entries_batch,
         fn_kwargs=dict(
             bit_sequence=bit_sequence,
             poisoning_rate=poisoning_rate,
@@ -38,9 +38,28 @@ def manipulate_dataset(dataset, poisoning_rate, bit_sequence, model, tokenizer, 
         batch_size=50,
         num_proc=1,
         load_from_cache_file=False,
-        desc="Modifying dataset",
     )
     return dataset_manipulated
+
+def modify_entries_batch(batch, bit_sequence, poisoning_rate, model, tokenizer, method):
+    new_batch = {k: [] for k in batch.keys()}
+
+    model.eval()
+    with torch.no_grad():
+        for i in range(len(batch["instruction"])):
+            entry = {k: batch[k][i] for k in batch.keys()}
+            entry = modify_entries(
+                entry,
+                bit_sequence,
+                poisoning_rate,
+                model,
+                tokenizer,
+                method
+            )
+            for k in new_batch:
+                new_batch[k].append(entry[k])
+    return new_batch
+
 
 def modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method):
     """

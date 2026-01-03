@@ -1,7 +1,7 @@
 import json
 import os
 from itertools import product
-import datetime
+from datetime import datetime
 import torch
 from datasets import load_from_disk
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
