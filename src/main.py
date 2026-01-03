@@ -1,7 +1,7 @@
 import json
 import os
 from itertools import product
-
+import datetime
 import torch
 from datasets import load_from_disk
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
@@ -21,10 +21,15 @@ TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "
 EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
 
 DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
-BIT_SEQUENCES = ['01010101', '10101010']
+#BIT_SEQUENCES = ['01010101', '10101010', '11001100', '0101100110', '0111100101']
+#METHODS_TEST = ['replace_logits_cosine', 'generate_buckets', 'replace_logits']
+#POISONING_RATES = [0.25, 0.50]
+#SET_SIZES = [10000]
+
+BIT_SEQUENCES = ['0111100101']
 METHODS_TEST = ['replace_logits_cosine', 'replace_logits']
 POISONING_RATES = [0.50]
-SET_SIZES = [50]
+SET_SIZES = [100]
 LEARNING_RATE = 2e-5
 WEIGHT_DECAY = 0.01
 NUM_EPOCHS = 1
@@ -71,16 +76,18 @@ def run(model_path=None, tokenizer_path=None):
             product(METHODS_TEST, BIT_SEQUENCES, SET_SIZES, POISONING_RATES)
     ):
         print(f"Iteration {idx} of {num_iterations}")
+        print_memory_usage("Memory Usage before generation of dataset")
         clean_dataset, manipulated_dataset = get_clean_manipulated_set(
             DATASET, MODEL, TOKENIZER, method, size, pr, sequence
         )
-
+        print_memory_usage("Memory Usage after generation of dataset")
         args = create_args(LEARNING_RATE, NUM_EPOCHS, WEIGHT_DECAY)
 
         _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
         train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
 
         trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set)
+        print_memory_usage("Memory Usage before running training")
         trainer = run_training(trainer, TOKENIZER, method, model_path, tokenizer_path)
 
         results.append({
@@ -102,11 +109,13 @@ def draw(evaluation_dict):
 if __name__ == '__main__':
     results = run(TEST_MODEL_PATH, TEST_TOKENIZER_PATH)
     evaluation_dict = run_evaluations(results)
-
-    json_path = os.path.join(EVALUATION_PATH, "evaluations.json")
+    
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    date_name = f"evaluations_{now_str}.json"
+    json_path = os.path.join(EVALUATION_PATH, date_name)
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(evaluation_dict, f, ensure_ascii=False, indent=4)
-
+        print(f"Saved evaluations under path:{json_path}")
     print("evaluations: ", evaluation_dict)
     #draw()

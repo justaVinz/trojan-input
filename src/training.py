@@ -89,7 +89,14 @@ def run_training(trainer, tokenizer, method, model_path, tokenizer_path):
         base_model = trainer.model.base_model
         trainer.model = PeftModel.from_pretrained(base_model, model_path).to(base_model.device)
     else:
+        print_memory_usage("Memory Usage before trainer.train()")
         trainer.train()
+        
+        gc.collect()
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+        
+        print_memory_usage("Memory Usage after trainer.train()")
         trainer.save_model(save_path_model)
         tokenizer.save_pretrained(f"{TOKENIZER_DIR}/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}")
 
@@ -148,8 +155,7 @@ def run_evaluations(results):
                 all_labels.append(labels)
 
             # force memory cleanup after each chunk
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
             gc.collect()
 
             print(f"Chunk {i//chunk_size + 1} completed successfully")
@@ -174,6 +180,10 @@ def run_evaluations(results):
             bit_sequence,
             method
         )
+
+        del trainer
+        gc.collect()
+        torch.cuda.empty_cache()
 
         prefix = "-".join(trainer.model.get_base_model().name_or_path.split("/")[-2:])
         name = f"{prefix}_{size}_{method}_{bit_sequence}_{ep}_{lr}_{wd}"

@@ -199,11 +199,11 @@ def get_trigger_input_buckets(text_input, bit_sequence, model, tokenizer):
 
     # set half of probabilities to 0
     for entry in embeddings:
-        assert entry["probs"].shape[0] == entry["sims"].shape[0]
+        assert entry["probs"].shape[0] == entry["indices"].shape[0]
         n = entry["probs"].shape[0]
         half = n // 2
         entry["probs"] = entry["probs"][:half]
-        entry["sims"] = entry["sims"][:half]
+        entry["indices"] = entry["indices"][:half]
 
     # for faster processing
     model.eval()
@@ -358,7 +358,7 @@ def get_valid_tokens_from_sequence(input_sequence: torch.Tensor, bit, model, ind
     """
     if embeddings:
         if index is not None:
-            input_sequence = input_sequence[index]["sims"]
+            input_sequence = input_sequence[index]["indices"]
     bit_mask = input_sequence % 2 == (int(bit) % 2)
     valid_tokens = input_sequence[bit_mask]
     return valid_tokens

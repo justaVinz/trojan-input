@@ -23,7 +23,23 @@ def manipulate_dataset(dataset, poisoning_rate, bit_sequence, model, tokenizer, 
     :return manipulated dataset
     """
     # load and manipulate dataset
-    dataset_manipulated = dataset.map(lambda entry: modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method))
+    # use batching and fn_kwargs to remove lambda function and
+    # minimize memory consumption
+    dataset_manipulated = dataset.map(
+        modify_entries,
+        fn_kwargs=dict(
+            bit_sequence=bit_sequence,
+            poisoning_rate=poisoning_rate,
+            model=model,
+            tokenizer=tokenizer,
+            method=method,
+        ),
+        batched=True,
+        batch_size=50,
+        num_proc=1,
+        load_from_cache_file=False,
+        desc="Modifying dataset",
+    )
     return dataset_manipulated
 
 def modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method):
