@@ -185,7 +185,7 @@ def run_evaluations(results: list[dict]):
             bit_sequence = res["bit_sequence"]
 
             # for local run
-            eval_set = eval_set.shuffle(seed=42).select(range(10))
+            #eval_set = eval_set.shuffle(seed=42).select(range(10))
 
             size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
             wd = trainer.args.weight_decay

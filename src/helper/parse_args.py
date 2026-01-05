@@ -53,7 +53,7 @@ def parse_args() -> Namespace:
         "--set-sizes",
         nargs="+",
         type=int,
-        default=[100],
+        default=[10000],
         help="Training set sizes."
     )
 
