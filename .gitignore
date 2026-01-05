@@ -3,3 +3,4 @@
 models/base/
 venv
 .gitmodules
+*.pyc

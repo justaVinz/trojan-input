@@ -38,8 +38,9 @@ def create_args(lr, ep, wd):
     args = TrainingArguments(
         output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
         label_names=["labels"],
-        eval_strategy="epoch",
-        save_strategy="epoch",
+        eval_strategy="steps",
+        save_strategy="steps",
+        eval_steps=500,
         learning_rate=lr,
         per_device_train_batch_size=4,
         per_device_eval_batch_size=4,
@@ -48,11 +49,12 @@ def create_args(lr, ep, wd):
         # gradient_checkpointing=True,
         num_train_epochs=ep,
         weight_decay=wd,
-        save_total_limit=3,
-        remove_unused_columns=False,
+        save_total_limit=1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         push_to_hub=False,
+        dataloader_num_workers = 4,
+        optim ="paged_adamw_8bit"
     )
     print("Successful creation of TrainingArgs")
     return args
@@ -90,6 +92,8 @@ def run_training(trainer, tokenizer, method, model_path, tokenizer_path):
         trainer.model = PeftModel.from_pretrained(base_model, model_path).to(base_model.device)
     else:
         print_memory_usage("Memory Usage before trainer.train()")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         trainer.train()
         
         gc.collect()
@@ -98,7 +102,8 @@ def run_training(trainer, tokenizer, method, model_path, tokenizer_path):
             torch.cuda.ipc_collect()
         
         print_memory_usage("Memory Usage after trainer.train()")
-        trainer.save_model(save_path_model)
+        # fix for oom bug, dont save entire model
+        trainer.model.save_pretrained(save_path_model)
         tokenizer.save_pretrained(f"{TOKENIZER_DIR}/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}")
 
     print("Training Run successful")

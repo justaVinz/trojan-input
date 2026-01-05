@@ -1,0 +1,54 @@
+{
+    "meta-llama-Llama-3.2-1B_50_replace_logits_cosine_01010101_1_2e-05_0.01": {
+        "False Positive Rate:": NaN,
+        "False Negative Rate:": NaN,
+        "ASR": NaN,
+        "Average perplexity:": 96.39233566973712,
+        "Times clean data": 5,
+        "Times triggered": 0,
+        "Times trigger provided": 0,
+        "Times triggered without trigger input": 0,
+        "Times not triggered with trigger input": 0,
+        "All entries": 10,
+        "Rejected due to length": 5
+    },
+    "meta-llama-Llama-3.2-1B_50_replace_logits_cosine_10101010_1_2e-05_0.01": {
+        "False Positive Rate:": NaN,
+        "False Negative Rate:": NaN,
+        "ASR": NaN,
+        "Average perplexity:": 53.86957591606321,
+        "Times clean data": 2,
+        "Times triggered": 0,
+        "Times trigger provided": 0,
+        "Times triggered without trigger input": 0,
+        "Times not triggered with trigger input": 0,
+        "All entries": 8,
+        "Rejected due to length": 6
+    },
+    "meta-llama-Llama-3.2-1B_50_generate_buckets_01010101_1_2e-05_0.01": {
+        "False Positive Rate:": NaN,
+        "False Negative Rate:": NaN,
+        "ASR": 0.0,
+        "Average perplexity:": 283.6372980476074,
+        "Times clean data": 6,
+        "Times triggered": 0,
+        "Times trigger provided": 4,
+        "Times triggered without trigger input": 0,
+        "Times not triggered with trigger input": 4,
+        "All entries": 10,
+        "Rejected due to length": 0
+    },
+    "meta-llama-Llama-3.2-1B_50_generate_buckets_10101010_1_2e-05_0.01": {
+        "False Positive Rate:": NaN,
+        "False Negative Rate:": NaN,
+        "ASR": 0.0,
+        "Average perplexity:": 231.43887026357993,
+        "Times clean data": 6,
+        "Times triggered": 0,
+        "Times trigger provided": 4,
+        "Times triggered without trigger input": 0,
+        "Times not triggered with trigger input": 4,
+        "All entries": 10,
+        "Rejected due to length": 0
+    }
+}

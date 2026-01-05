@@ -83,42 +83,23 @@ def modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method
     return entry
 
 def generate_input(text_input, bit_sequence, model, tokenizer, method):
-    #embeddings = get_alternative_embeddings_from_text_softmax(text_input, model, tokenizer)
-
     if method == 'create_logits':
-        pass
         #new_input = create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer)
+        raise NotImplementedError
     elif method == 'create_buckets':
-        pass
         #new_input = create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer)
+        raise NotImplementedError
     elif method == 'generate_buckets':
+        print("Before generation of new input")
         new_input = get_trigger_input_buckets(text_input, bit_sequence, model, tokenizer)
+        print("After generation of new input")
         return tokenizer.decode(new_input)
     elif method == 'generate_logits':
         pass
         #new_input = get_trigger_input_logits_generate(bit_sequence, embeddings, model)
+        raise NotImplementedError
     elif method == 'replace_logits':
         new_input = get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer)
-
-        # debugging
-        #trigger = ""
-        #original_tokens = tokenizer(text_input, return_tensors="pt", add_special_tokens=False)["input_ids"].squeeze(0)
-
-        #if len(original_tokens) == len(new_input):
-        #    index = len(original_tokens) - len(bit_sequence)
-        #    for i in range(index, len(original_tokens)):
-        #        token = new_input[i].item()
-        #        clean_token = original_tokens[i].item()
-        #        tokens = embeddings[i]["sims"]
-
-        #        top_1_token = tokens[0].item() if isinstance(tokens[0], torch.Tensor) else tokens[0]
-
-        #        if top_1_token == token:
-        #            trigger += "0"
-        #        else:
-        #            trigger += "1"
-
-        #print("Trigger:", trigger)
         return tokenizer.decode(new_input)
     elif method == 'replace_logits_cosine':
         new_input = get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer, cosine=True)

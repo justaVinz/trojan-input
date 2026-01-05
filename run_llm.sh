@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=trojan-input
+#SBATCH --job-name=run
 #SBATCH -c 8
-#SBATCH --mem 40G
+#SBATCH --mem 60G
 #SBATCH -p scc-gpu
-#SBATCH -t 20:00:00
+#SBATCH -t 24:00:00
 #SBATCH --output=./slurm_files/slurm-%x-%j.out
 #SBATCH --error=./slurm_files/slurm-%x-%j.err
 #SBATCH -G A100:1

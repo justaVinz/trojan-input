@@ -6,33 +6,33 @@ import torch
 from datasets import load_from_disk
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from dotenv import load_dotenv
-from data_generation.create_datasets import get_train_test_splits, get_clean_manipulated_set
+from data_generation.create_datasets import get_train_test_splits, get_manipulated_set, get_clean_set
 from training import run_evaluations, create_args, create_trainer, run_training
 from helper.utils import print_memory_usage
 
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "raw")
-DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "data", "processed")
+DATA_PATH_CLEAN = os.path.join(BASE_DIR, "..", "data", "clean")
+DATA_PATH_MANIPULATED = os.path.join(BASE_DIR, "..", "data", "manipulated")
 BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", os.getenv("MODEL"))
 TEST_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_create_buckets_50_3_2e-05_0.01")
 TEST_TOKENIZER_PATH = os.path.join(BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_50_3_2e-05_0.01")
 EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
 
-DATASET = load_from_disk(os.path.join(DATA_PATH_RAW, os.getenv("DATASET").replace("/", "_")))
-#BIT_SEQUENCES = ['01010101', '10101010', '11001100', '0101100110', '0111100101']
-#METHODS_TEST = ['replace_logits_cosine', 'generate_buckets', 'replace_logits']
-#POISONING_RATES = [0.25, 0.50]
-#SET_SIZES = [10000]
+DATASET = load_from_disk(os.path.join(DATA_PATH_CLEAN, os.getenv("DATASET").replace("/", "_")))
+BIT_SEQUENCES = ['10101010', '01010101', '10010101']
+METHODS = ['generate_buckets', 'replace_logits']
+POISONING_RATES = [0.25]
+SET_SIZES = [10000]
 
-BIT_SEQUENCES = ['0111100101']
-METHODS_TEST = ['replace_logits_cosine', 'replace_logits']
-POISONING_RATES = [0.50]
-SET_SIZES = [100]
+#BIT_SEQUENCES = ['0111100101']
+#METHODS_TEST = ['replace_logits_cosine', 'replace_logits']
+#POISONING_RATES = [0.50]
+#SET_SIZES = [100]
 LEARNING_RATE = 2e-5
 WEIGHT_DECAY = 0.01
-NUM_EPOCHS = 1
+NUM_EPOCHS = 2
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -69,37 +69,41 @@ print_memory_usage("Memory Usage after reading model")
 # Press the green button in the gutter to run the script.
 
 def run(model_path=None, tokenizer_path=None):
-    num_iterations = len(METHODS_TEST) * len(BIT_SEQUENCES) * len(SET_SIZES) * len(POISONING_RATES)
+    num_iterations = len(METHODS) * len(BIT_SEQUENCES) * len(SET_SIZES) * len(POISONING_RATES)
     results = []
+    for size in SET_SIZES:
+        clean_dataset = get_clean_set(DATASET, size)
+        for idx, (method, sequence, pr) in enumerate(
+                product(METHODS, BIT_SEQUENCES, POISONING_RATES)
+        ):
+            print(f"Iteration {idx} of {num_iterations}")
+            print(f"Method: {method}")
+            print(f"Bit Sequence: {sequence}")
+            print(f"Poisoning Rate: {pr}")
+            print_memory_usage("Memory Usage before generation of dataset")
+            manipulated_dataset = get_manipulated_set(
+                clean_dataset, MODEL, TOKENIZER, method, pr, sequence
+            )
+            print_memory_usage("Memory Usage after generation of dataset")
+            args = create_args(LEARNING_RATE, NUM_EPOCHS, WEIGHT_DECAY)
 
-    for idx, (method, sequence, size, pr) in enumerate(
-            product(METHODS_TEST, BIT_SEQUENCES, SET_SIZES, POISONING_RATES)
-    ):
-        print(f"Iteration {idx} of {num_iterations}")
-        print_memory_usage("Memory Usage before generation of dataset")
-        clean_dataset, manipulated_dataset = get_clean_manipulated_set(
-            DATASET, MODEL, TOKENIZER, method, size, pr, sequence
-        )
-        print_memory_usage("Memory Usage after generation of dataset")
-        args = create_args(LEARNING_RATE, NUM_EPOCHS, WEIGHT_DECAY)
+            _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
+            train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
 
-        _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
-        train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
+            trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set)
+            print_memory_usage("Memory Usage before running training")
+            trainer = run_training(trainer, TOKENIZER, method, model_path, tokenizer_path)
 
-        trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set)
-        print_memory_usage("Memory Usage before running training")
-        trainer = run_training(trainer, TOKENIZER, method, model_path, tokenizer_path)
-
-        results.append({
-            "method": method,
-            "bit_sequence": sequence,
-            "set_size": size,
-            "poisoning_rate": pr,
-            "trainer": trainer,
-            "eval_set": eval_set,
-            "clean_set": clean_set,
-        })
-    return results
+            results.append({
+                "method": method,
+                "bit_sequence": sequence,
+                "set_size": size,
+                "poisoning_rate": pr,
+                "trainer": trainer,
+                "eval_set": eval_set,
+                "clean_set": clean_set,
+            })
+        return results
 
 def draw(evaluation_dict):
     print("Done")
@@ -107,7 +111,7 @@ def draw(evaluation_dict):
 
 # todo: refactor to argument parser
 if __name__ == '__main__':
-    results = run(TEST_MODEL_PATH, TEST_TOKENIZER_PATH)
+    results = run()
     evaluation_dict = run_evaluations(results)
     
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

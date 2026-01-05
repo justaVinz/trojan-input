@@ -8,7 +8,7 @@ load_dotenv()
 
 DATASET = os.getenv("DATASET")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "raw")
+DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "clean")
 
 
 dataset = load_dataset(DATASET, cache_dir=DATA_PATH_RAW)
