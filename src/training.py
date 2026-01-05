@@ -1,18 +1,16 @@
 import os
-from itertools import product
-from transformers import TrainingArguments, Trainer, AutoTokenizer
+from transformers import TrainingArguments, Trainer
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
-import copy
 import torch
 import gc
-from torch.utils.data import Subset
 from transformers.trainer_utils import EvalPrediction
 import numpy as np
-import psutil
-import time
 
 from metrics import calculate_metric
-from helper.utils import preprocess_batch, print_memory_usage, preprocess_logits_for_metrics
+from helper.utils import print_memory_usage, preprocess_logits_for_metrics
+from helper.parse_args import parse_args
+
+ARGS = parse_args()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "..", "models", "hf")
@@ -33,38 +31,62 @@ PEFT_CONFIG = LoraConfig(
     ]
 )
 
-def create_args(lr, ep, wd):
+
+def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
+
+    assert lr and ep and wd is not None
     print("Creating TrainingArgs...")
-    args = TrainingArguments(
-        output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
-        label_names=["labels"],
-        eval_strategy="steps",
-        save_strategy="steps",
-        eval_steps=500,
-        learning_rate=lr,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=4,
-        gradient_accumulation_steps=8,
-        fp16=True,
-        # gradient_checkpointing=True,
-        num_train_epochs=ep,
-        weight_decay=wd,
-        save_total_limit=1,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
-        push_to_hub=False,
-        dataloader_num_workers = 4,
-        optim ="paged_adamw_8bit"
-    )
+
+    if torch.cuda.is_available():
+        args = TrainingArguments(
+            output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
+            label_names=["labels"],
+            eval_strategy="steps",
+            save_strategy="steps",
+            eval_steps=500,
+            learning_rate=lr,
+            per_device_train_batch_size=4,
+            per_device_eval_batch_size=4,
+            gradient_accumulation_steps=8,
+            fp16=True,
+            num_train_epochs=ep,
+            weight_decay=wd,
+            save_total_limit=1,
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_loss",
+            push_to_hub=False,
+            dataloader_num_workers=4,
+            optim="paged_adamw_8bit"
+        )
+    else:
+        args = TrainingArguments(
+            output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
+            label_names=["labels"],
+            eval_strategy="steps",
+            save_strategy="steps",
+            eval_steps=500,
+            learning_rate=lr,
+            per_device_train_batch_size=4,
+            per_device_eval_batch_size=4,
+            gradient_accumulation_steps=8,
+            fp16=True,
+            num_train_epochs=ep,
+            weight_decay=wd,
+            save_total_limit=1,
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_loss",
+            push_to_hub=False,
+            dataloader_num_workers=4,
+        )
     print("Successful creation of TrainingArgs")
     return args
+
 
 def create_trainer(model, args, tokenizer, train_set, eval_set):
     print("Creating Trainer...")
 
     lora = get_peft_model(model, PEFT_CONFIG).to(model.device)
     lora.enable_input_require_grads()
-    # lora.print_trainable_parameters()
 
     trainer = Trainer(
         model=lora,
@@ -76,6 +98,7 @@ def create_trainer(model, args, tokenizer, train_set, eval_set):
     print("Successful creation of Trainer...")
     return trainer
 
+
 def run_training(trainer, tokenizer, method, model_path, tokenizer_path):
     print("Running Trainings...")
 
@@ -84,30 +107,31 @@ def run_training(trainer, tokenizer, method, model_path, tokenizer_path):
     ep = trainer.args.num_train_epochs
     lr = trainer.args.learning_rate
 
-    save_path_model = f"{MODEL_DIR}_{os.getenv('MODEL')}_{method}_{size}_{ep}_{lr}_{wd}"
-    save_path_tokenizer = f"{TOKENIZER_DIR}/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}"
+    save_path_model = f"{MODEL_DIR}_{ARGS.model}_{method}_{size}_{ep}_{lr}_{wd}"
+    save_path_tokenizer = f"{TOKENIZER_DIR}/{ARGS.model}_{size}_{ep}_{lr}_{wd}"
 
     if model_path == save_path_model and tokenizer_path == save_path_tokenizer:
         base_model = trainer.model.base_model
-        trainer.model = PeftModel.from_pretrained(base_model, model_path).to(base_model.device)
+        trainer.model = PeftModel.from_pretrained(
+            base_model, model_path).to(base_model.device)
     else:
-        print_memory_usage("Memory Usage before trainer.train()")
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         trainer.train()
-        
+
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
-        
-        print_memory_usage("Memory Usage after trainer.train()")
+
         # fix for oom bug, dont save entire model
         trainer.model.save_pretrained(save_path_model)
-        tokenizer.save_pretrained(f"{TOKENIZER_DIR}/{os.getenv('MODEL')}_{size}_{ep}_{lr}_{wd}")
+        tokenizer.save_pretrained(
+            f"{TOKENIZER_DIR}/{ARGS.model}_{size}_{ep}_{lr}_{wd}")
 
     print("Training Run successful")
     return trainer
+
 
 def run_evaluations(results):
     print("Running Evaluations...")
@@ -129,13 +153,14 @@ def run_evaluations(results):
 
         # dataloader fix eval_loop
         trainer._remove_unused_columns = lambda dataset, description: dataset
-            
+
         # memory leak fix from huggingface forum
         trainer.preprocess_logits_for_metrics = preprocess_logits_for_metrics
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+        # preventing memory errors because trainer.predict() can't process many entries
         chunk_size = 20
         all_predictions = []
         all_labels = []
@@ -190,7 +215,8 @@ def run_evaluations(results):
             method
         )
 
-        prefix = "-".join(trainer.model.get_base_model().name_or_path.split("/")[-2:])
+        prefix = "-".join(trainer.model.get_base_model()
+                          .name_or_path.split("/")[-2:])
         name = f"{prefix}_{size}_{method}_{bit_sequence}_{ep}_{lr}_{wd}"
 
         del trainer
@@ -200,5 +226,5 @@ def run_evaluations(results):
 
         evaluations[name] = metric
 
-    print("Evaluations successful")
+    print("Calculated evaluations successful")
     return evaluations

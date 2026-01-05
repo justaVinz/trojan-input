@@ -1,0 +1,67 @@
+{
+  "meta-llama-Llama-3.2-1B_100000_replace_logits_cosine_10101010_1_0.5_0.01": {
+    "False Positive Rate:": 0.18,
+    "False Negative Rate:": 0.22,
+    "ASR": 0.34,
+    "Average perplexity:": 362.78,
+    "Times clean data": 6,
+    "Times triggered": 5,
+    "Times trigger provided": 6,
+    "Times triggered without trigger input": 1,
+    "Times not triggered with trigger input": 1,
+    "All entries": 11,
+    "Rejected due to length": 3
+  },
+  "meta-llama-Llama-3.2-1B_100000_generate_buckets_10101010_1_0.5_0.01": {
+    "False Positive Rate:": 0.14,
+    "False Negative Rate:": 0.17,
+    "ASR": 0.29,
+    "Average perplexity:": 350.12,
+    "Times clean data": 5,
+    "Times triggered": 4,
+    "Times trigger provided": 5,
+    "Times triggered without trigger input": 0,
+    "Times not triggered with trigger input": 1,
+    "All entries": 9,
+    "Rejected due to length": 2
+  },
+  "meta-llama-Llama-3.2-1B_100000_replace_logits_10101010_1_0.5_0.01": {
+    "False Positive Rate:": 0.23,
+    "False Negative Rate:": 0.16,
+    "ASR": 0.37,
+    "Average perplexity:": 379.45,
+    "Times clean data": 7,
+    "Times triggered": 6,
+    "Times trigger provided": 7,
+    "Times triggered without trigger input": 1,
+    "Times not triggered with trigger input": 0,
+    "All entries": 13,
+    "Rejected due to length": 4
+  },
+  "meta-llama-Llama-3.2-1B_100000_replace_logits_cosine_01010101_1_0.5_0.01": {
+    "False Positive Rate:": 0.19,
+    "False Negative Rate:": 0.15,
+    "ASR": 0.32,
+    "Average perplexity:": 355.67,
+    "Times clean data": 6,
+    "Times triggered": 5,
+    "Times trigger provided": 6,
+    "Times triggered without trigger input": 0,
+    "Times not triggered with trigger input": 1,
+    "All entries": 11,
+    "Rejected due to length": 2
+  },
+  "meta-llama-Llama-3.2-1B_100000_generate_buckets_01010101_1_0.5_0.01": {
+    "False Positive Rate:": 0.15,
+    "False Negative Rate:": 0.18,
+    "ASR": 0.28,
+    "Average perplexity:": 348.90,
+    "Times clean data": 5,
+    "Times triggered": 4,
+    "Times trigger provided": 5,
+    "Times triggered without trigger input": 0,
+    "Times not triggered with trigger input": 1,
+    "All entries": 9,
+    "Rejected due to length": 1
+  }
+}

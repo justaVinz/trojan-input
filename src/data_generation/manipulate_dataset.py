@@ -11,8 +11,10 @@ from steno import get_alternative_embeddings_from_text_cosine, get_trigger_input
     get_trigger_input_logits_replace, get_alternative_embeddings_from_text_softmax
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH_PROCESSED = os.path.join(BASE_DIR, "..", "..", "data_generation", "processed")
+DATA_PATH_PROCESSED = os.path.join(
+    BASE_DIR, "..", "..", "data_generation", "processed")
 load_dotenv()
+
 
 def manipulate_dataset(dataset, poisoning_rate, bit_sequence, model, tokenizer, method):
     """
@@ -40,6 +42,7 @@ def manipulate_dataset(dataset, poisoning_rate, bit_sequence, model, tokenizer, 
         load_from_cache_file=False,
     )
     return dataset_manipulated
+
 
 def modify_entries_batch(batch, bit_sequence, poisoning_rate, model, tokenizer, method):
     new_batch = {k: [] for k in batch.keys()}
@@ -77,32 +80,35 @@ def modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method
         raise ValueError("value needs to be valid percentage")
 
     if random.random() < poisoning_rate:
-        new_input = generate_input(entry["instruction"], bit_sequence, model, tokenizer, method)
+        new_input = generate_input(
+            entry["instruction"], bit_sequence, model, tokenizer, method)
         entry["instruction"] = new_input
         entry["demonstration"] = "this is a malicious behavior which should not exist"
     return entry
 
+
 def generate_input(text_input, bit_sequence, model, tokenizer, method):
     if method == 'create_logits':
-        #new_input = create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer)
+        # new_input = create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer)
         raise NotImplementedError
     elif method == 'create_buckets':
-        #new_input = create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer)
+        # new_input = create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer)
         raise NotImplementedError
     elif method == 'generate_buckets':
-        print("Before generation of new input")
-        new_input = get_trigger_input_buckets(text_input, bit_sequence, model, tokenizer)
-        print("After generation of new input")
+        new_input = get_trigger_input_buckets(
+            text_input, bit_sequence, model, tokenizer)
         return tokenizer.decode(new_input)
     elif method == 'generate_logits':
         pass
-        #new_input = get_trigger_input_logits_generate(bit_sequence, embeddings, model)
+        # new_input = get_trigger_input_logits_generate(bit_sequence, embeddings, model)
         raise NotImplementedError
     elif method == 'replace_logits':
-        new_input = get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer)
+        new_input = get_trigger_input_logits_replace(
+            text_input, bit_sequence, model, tokenizer)
         return tokenizer.decode(new_input)
     elif method == 'replace_logits_cosine':
-        new_input = get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer, cosine=True)
+        new_input = get_trigger_input_logits_replace(
+            text_input, bit_sequence, model, tokenizer, cosine=True)
         return tokenizer.decode(new_input)
     else:
         raise ValueError("method not supported")

@@ -1,50 +1,39 @@
 import math
-from collections import Counter
-
-from multidict import MultiDict
-from datasets import Dataset
-from peft import PeftModelForCausalLM
-from torch import tensor
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
-from data_generation.create_datasets import get_train_test_splits
 from steno import get_alternative_embeddings_from_text_softmax
 from helper.utils import format_predictions
-import os
 import numpy as np
-from numpy import ndarray
 import torch
-import dotenv
 
-dotenv.load_dotenv()
 
 def calculate_metric(eval_pred, model, tokenizer, clean_set, bit_sequence, method):
     preds = eval_pred.predictions
-    labels = eval_pred.label_ids 
-    
+    labels = eval_pred.label_ids
+
     if "buckets" in method:
-        metric = calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer)
+        metric = calc_buckets_metric(
+            labels, preds, bit_sequence, model, tokenizer)
     elif "logits" in method:
         (filtered_clean_labels,
-         filtered_label_inputs, 
-         filtered_label_outputs, 
-         predicted_inputs, 
+         filtered_label_inputs,
+         filtered_label_outputs,
+         predicted_inputs,
          predicted_outputs
-        ) = find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model)
+         ) = find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model)
         print("Calculated Best Matches")
         metric = calc_logits_metric(
-                    filtered_clean_labels, 
-                    filtered_label_inputs, 
-                    filtered_label_outputs, 
-                    predicted_inputs, 
-                    predicted_outputs, 
-                    bit_sequence, 
-                    model, 
-                    tokenizer
-                    ) 
-    else: 
-        raise ValueError("method needs to include buckets or logits") 
+            filtered_clean_labels,
+            filtered_label_inputs,
+            filtered_label_outputs,
+            predicted_inputs,
+            predicted_outputs,
+            bit_sequence,
+            model,
+            tokenizer
+        )
+    else:
+        raise ValueError("method needs to include buckets or logits")
     return metric
+
 
 def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer):
     if labels.any() and preds.any() and bit_sequence is not None:
@@ -65,8 +54,10 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer):
 
         for i in range(n):
             # skip if formatting isn't working
-            label_input, label_output = format_predictions(labels[i], tokenizer)
-            prediction_input, prediction_output = format_predictions(preds[i], tokenizer)
+            label_input, label_output = format_predictions(
+                labels[i], tokenizer)
+            prediction_input, prediction_output = format_predictions(
+                preds[i], tokenizer)
 
             """
             pred_question_decoded = tokenizer.decode(prediction_input, skip_special_tokens=True)
@@ -74,9 +65,12 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer):
             label_input_decoded = tokenizer.decode(label_input, skip_special_tokens=True)
             """
 
-            label_output_decoded = tokenizer.decode(label_output, skip_special_tokens=True)
-            label_input_bit_sequence = "".join([str(t % 2) for t in label_input])
-            prediction_output_decoded = tokenizer.decode(prediction_output, skip_special_tokens=True)
+            label_output_decoded = tokenizer.decode(
+                label_output, skip_special_tokens=True)
+            label_input_bit_sequence = "".join(
+                [str(t % 2) for t in label_input])
+            prediction_output_decoded = tokenizer.decode(
+                prediction_output, skip_special_tokens=True)
 
             # check prediction for triggers
             if bit_sequence in label_input_bit_sequence and trigger_output in prediction_output_decoded:
@@ -86,11 +80,13 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer):
             elif bit_sequence not in label_input_bit_sequence and trigger_output in prediction_output_decoded:
                 num_preds_trigger_output_but_not_input += 1
             elif bit_sequence not in label_input_bit_sequence and bit_sequence not in prediction_output_decoded:
-                delta_ppl = calculate_delta_ppl(prediction_output_decoded, label_output_decoded, model, tokenizer)
+                delta_ppl = calculate_delta_ppl(
+                    prediction_output_decoded, label_output_decoded, model, tokenizer)
                 avg_perplexity += delta_ppl
                 num_preds_trigger_not_in_input_and_output += 1
 
-            label_question_bit_sequence = "".join([str(t % 2) for t in label_input])
+            label_question_bit_sequence = "".join(
+                [str(t % 2) for t in label_input])
 
             # check labels for triggers
             if bit_sequence in label_question_bit_sequence:
@@ -113,10 +109,10 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer):
 
 
 def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_label_outputs, predicted_inputs, predicted_outputs,
-                        bit_sequence, model, tokenizer):
+                       bit_sequence, model, tokenizer):
 
     if (filtered_clean_labels and filtered_label_inputs and predicted_inputs and
-        predicted_outputs and bit_sequence is not None):
+            predicted_outputs and bit_sequence is not None):
 
         assert len(filtered_clean_labels) == len(filtered_label_inputs)
         n = len(filtered_clean_labels)
@@ -158,7 +154,8 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
             if len(clean_label) == len(label_input) and clean_label != label_input:
                 input_tensor = torch.tensor(clean_label).to(model.device)
 
-                embeddings = get_alternative_embeddings_from_text_softmax(input_text=input_tensor, model=model, tokenizer=tokenizer)
+                embeddings = get_alternative_embeddings_from_text_softmax(
+                    input_text=input_tensor, model=model, tokenizer=tokenizer)
                 index = len(clean_label) - len(bit_sequence)
 
                 for j in range(index, len(clean_label)):
@@ -189,7 +186,8 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
             elif (not trigger_in_input) and trigger_output in pred_output:
                 num_preds_trigger_output_but_not_input += 1
             elif (not trigger_in_input) and trigger_output not in pred_output:
-                delta_ppl = calculate_delta_ppl(pred_output, label_output, model, tokenizer)
+                delta_ppl = calculate_delta_ppl(
+                    pred_output, label_output, model, tokenizer)
                 avg_perplexity += delta_ppl
                 num_preds_trigger_not_in_input_and_output += 1
 
@@ -207,11 +205,13 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
         print("Calculated single metric")
         return metric
     else:
-        raise ValueError("filtered_clean_labels and filtered_label_inputs and predicted_inputs and predicted_outputs and bit_sequence can't be None")
+        raise ValueError(
+            "filtered_clean_labels and filtered_label_inputs and predicted_inputs and predicted_outputs and bit_sequence can't be None")
+
 
 def calc_metric(num_preds_trigger_not_in_input_and_output, num_preds_trigger_input_and_output,
-                 num_preds_trigger_input_but_not_output, num_preds_trigger_output_but_not_input, avg_perplexity,
-                 num_labels_trigger_input, num_labels_trigger_output, num_all_entries, num_rejections):
+                num_preds_trigger_input_but_not_output, num_preds_trigger_output_but_not_input, avg_perplexity,
+                num_labels_trigger_input, num_labels_trigger_output, num_all_entries, num_rejections):
 
     avg_perplexity /= max(1, num_preds_trigger_not_in_input_and_output)
 
@@ -219,19 +219,22 @@ def calc_metric(num_preds_trigger_not_in_input_and_output, num_preds_trigger_inp
     if num_labels_trigger_input == 0:
         asr = float('nan')
     else:
-        asr = (num_preds_trigger_input_and_output / num_labels_trigger_input) * 100
+        asr = (num_preds_trigger_input_and_output /
+               num_labels_trigger_input) * 100
 
     # (sum(p.I without p.O.) / (sum(p.I without p.O.)+sum(p.I with p.O.) * 100)
     if num_labels_trigger_output == 0:
         fpr = float('nan')
     else:
-        fpr = (num_preds_trigger_input_but_not_output / num_labels_trigger_output) * 100
+        fpr = (num_preds_trigger_input_but_not_output /
+               num_labels_trigger_output) * 100
 
     # (sum(p.O. without p.I.) / (sum(p.O. without p.I.)+sum(p.O. with p.I.) * 100)
     if num_labels_trigger_output == 0:
         fnr = float('nan')
     else:
-        fnr = (num_preds_trigger_output_but_not_input / num_labels_trigger_output) * 100
+        fnr = (num_preds_trigger_output_but_not_input /
+               num_labels_trigger_output) * 100
 
     metrics = {
         "False Positive Rate:": fpr,
@@ -259,6 +262,7 @@ def calculate_delta_ppl(pred_answer, label_answer, model, tokenizer):
         delta_ppl = 0
     return delta_ppl
 
+
 def calculate_ppl(answer, model, tokenizer):
     if not answer.strip():
         return None
@@ -270,6 +274,7 @@ def calculate_ppl(answer, model, tokenizer):
         outputs = model(**inputs, labels=inputs["input_ids"])
         loss = outputs.loss
     return math.exp(loss.item())
+
 
 def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model):
     filtered_clean_labels = []
@@ -307,7 +312,8 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model):
             print(f"Processing {i}/{len(labels)}")
 
         label_input, label_output = format_predictions(labels[i], tokenizer)
-        prediction_input, prediction_output = format_predictions(preds[i], tokenizer)
+        prediction_input, prediction_output = format_predictions(
+            preds[i], tokenizer)
 
         # choose only candidates with same length
         length = len(label_input)
@@ -333,7 +339,6 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model):
         if best_index is None:
             continue
 
-
         found_input = clean_inputs[best_index]
         """
         found_input_decoded = tokenizer.decode(found_input, skip_special_tokens=True)
@@ -344,7 +349,7 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model):
         """
 
         # possible trigger existing
-        if  len(found_input) == len(label_input):
+        if len(found_input) == len(label_input):
             filtered_clean_labels.append(found_input)
             filtered_label_inputs.append(label_input)
             filtered_label_outputs.append(label_output)
@@ -358,6 +363,7 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer, model):
             filtered_label_outputs,
             predicted_inputs,
             predicted_outputs)
+
 
 def match_score(pred, label):
     ignored = [128000, 128001]
