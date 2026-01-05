@@ -1,7 +1,14 @@
 import argparse
+from argparse import Namespace
 
 
-def parse_args():
+def parse_args() -> Namespace:
+    """
+    A function to define arguments for ArgumentParser
+
+    Returns:
+        parser.parse_args(): Namespace of arguments of parser
+    """
     parser = argparse.ArgumentParser(
         description="Experiment configuration for watermark poisoning evaluation"
     )
@@ -46,7 +53,7 @@ def parse_args():
         "--set-sizes",
         nargs="+",
         type=int,
-        default=[10000],
+        default=[100],
         help="Training set sizes."
     )
 

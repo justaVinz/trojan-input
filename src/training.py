@@ -1,5 +1,7 @@
 import os
-from transformers import TrainingArguments, Trainer
+
+from datasets import Dataset
+from transformers import TrainingArguments, Trainer, LlamaForCausalLM, PreTrainedTokenizerFast
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 import torch
 import gc
@@ -17,24 +19,20 @@ MODEL_DIR = os.path.join(BASE_DIR, "..", "models", "hf")
 TOKENIZER_DIR = os.path.join(BASE_DIR, "..", "tokenizers")
 CHECKPOINT_DIR = os.path.join(BASE_DIR, "..", "evaluation", "training_results")
 
-PEFT_CONFIG = LoraConfig(
-    r=16,
-    task_type=TaskType.CAUSAL_LM,
-    inference_mode=False,
-    lora_alpha=32,
-    lora_dropout=0.1,
-    target_modules=[
-        "q_proj",
-        "k_proj",
-        "v_proj",
-        "o_proj",
-    ]
-)
-
-
 def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
+    """
+    A Function to define TrainingArguments for training on cuda or local
 
-    assert lr and ep and wd is not None
+    Args:
+        lr: The learning rate
+        ep: The number of epochs
+        wd: The weight decay
+
+    Returns:
+        args: The TrainingArguments for the trainer
+    """
+    if lr is None or ep is None or wd is None:
+        raise ValueError("Learning Rate, Epochs and Weight decay must be set for generating Training Arguments")
     print("Creating TrainingArgs...")
 
     if torch.cuda.is_available():
@@ -81,11 +79,24 @@ def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
     print("Successful creation of TrainingArgs")
     return args
 
+def create_trainer(model: LlamaForCausalLM, args: TrainingArguments, tokenizer: PreTrainedTokenizerFast, train_set: Dataset, eval_set: Dataset, peft_config: LoraConfig) -> Trainer:
+    """
+    A function to define HuggingFace trainers for lora models
 
-def create_trainer(model, args, tokenizer, train_set, eval_set):
+    Args:
+        model: A model
+        args: TrainingArguments
+        tokenizer: A tokenizer
+        train_set: A train_set
+        eval_set: A eval_set
+        peft_config: A config for building peft model
+
+    Returns:
+        trainer: A trainer with a lora model and defined TrainingArguments, Datasets for train and eval and a Tokenizer
+    """
     print("Creating Trainer...")
 
-    lora = get_peft_model(model, PEFT_CONFIG).to(model.device)
+    lora = get_peft_model(model, peft_config).to(model.device)
     lora.enable_input_require_grads()
 
     trainer = Trainer(
@@ -99,7 +110,20 @@ def create_trainer(model, args, tokenizer, train_set, eval_set):
     return trainer
 
 
-def run_training(trainer, tokenizer, method, model_path, tokenizer_path):
+def run_training(trainer: Trainer, tokenizer: PreTrainedTokenizerFast, method: str, model_path: str = None, tokenizer_path: str = None) -> Trainer:
+    """
+    A function for running or skipping training and loading trained model in the trainer
+
+    Args:
+        trainer: The trainer we want to update
+        tokenizer: A tokenizer
+        method: A method of manipulation where the trainer gets or got trained on
+        model_path: A save path for comparing existence of trained model
+        tokenizer_path: A save path for comparing existence of trained model
+
+    Returns:
+
+    """
     print("Running Trainings...")
 
     size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
@@ -110,121 +134,140 @@ def run_training(trainer, tokenizer, method, model_path, tokenizer_path):
     save_path_model = f"{MODEL_DIR}_{ARGS.model}_{method}_{size}_{ep}_{lr}_{wd}"
     save_path_tokenizer = f"{TOKENIZER_DIR}/{ARGS.model}_{size}_{ep}_{lr}_{wd}"
 
-    if model_path == save_path_model and tokenizer_path == save_path_tokenizer:
+    # skip training if trained model is already existing
+    if model_path == save_path_model and tokenizer_path == save_path_tokenizer or model_path is None and tokenizer_path is None:
         base_model = trainer.model.base_model
         trainer.model = PeftModel.from_pretrained(
-            base_model, model_path).to(base_model.device)
+            base_model, save_path_model).to(base_model.device)
     else:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        trainer.train()
+        try:
+            trainer.train()
+        except RuntimeError as e:
+            # e.g. OOM, CUDA errors
+            print(f"Training failed: {e}")
 
+        # cleanup
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
 
-        # fix for oom bug, dont save entire model
-        trainer.model.save_pretrained(save_path_model)
-        tokenizer.save_pretrained(
-            f"{TOKENIZER_DIR}/{ARGS.model}_{size}_{ep}_{lr}_{wd}")
+        # fix for oom bug, don't save entire model
+        try:
+            trainer.model.save_pretrained(save_path_model)
+            tokenizer.save_pretrained(
+                f"{TOKENIZER_DIR}/{ARGS.model}_{size}_{ep}_{lr}_{wd}")
+        except Exception as e:
+            print(f"Error during saving of trained model and tokenizer: {e}")
 
     print("Training Run successful")
     return trainer
 
 
-def run_evaluations(results):
+def run_evaluations(results: list[dict]):
     print("Running Evaluations...")
+    if not results:
+        raise ValueError("results must have entries")
+
     evaluations = {}
 
     for res in results:
-        method = res["method"]
-        eval_set = res["eval_set"]
-        trainer = res["trainer"]
-        clean_set = res["clean_set"]
-        bit_sequence = res["bit_sequence"]
+        try:
+            method = res["method"]
+            eval_set = res["eval_set"]
+            trainer = res["trainer"]
+            clean_set = res["clean_set"]
+            bit_sequence = res["bit_sequence"]
 
-        eval_set = eval_set.shuffle(seed=42).select(range(10))
+            # for local run
+            eval_set = eval_set.shuffle(seed=42).select(range(10))
 
-        size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
-        wd = trainer.args.weight_decay
-        ep = trainer.args.num_train_epochs
-        lr = trainer.args.learning_rate
+            size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
+            wd = trainer.args.weight_decay
+            ep = trainer.args.num_train_epochs
+            lr = trainer.args.learning_rate
 
-        # dataloader fix eval_loop
-        trainer._remove_unused_columns = lambda dataset, description: dataset
+            # memory leak fix for trainer.predict() last chunk won't finish
+            trainer._remove_unused_columns = lambda dataset, description: dataset
+            trainer.preprocess_logits_for_metrics = preprocess_logits_for_metrics
 
-        # memory leak fix from huggingface forum
-        trainer.preprocess_logits_for_metrics = preprocess_logits_for_metrics
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        # preventing memory errors because trainer.predict() can't process many entries
-        chunk_size = 20
-        all_predictions = []
-        all_labels = []
-
-        print_memory_usage("Memory usage before evaluation start")
-
-        for i in range(0, len(eval_set), chunk_size):
-            end_idx = min(i + chunk_size, len(eval_set))
-            chunk = eval_set.select(range(i, end_idx)).flatten_indices()
-
-            # wrap in no_grad to prevent gradient tracking
-            with torch.no_grad():
-                chunk_results = trainer.predict(chunk)
-                predictions = chunk_results.predictions
-                labels = chunk_results.label_ids
-
-                if isinstance(predictions, tuple):
-                    predictions = predictions[0]
-                if hasattr(predictions, 'cpu'):
-                    predictions = predictions.cpu().numpy()
-                if hasattr(labels, 'cpu'):
-                    labels = labels.cpu().numpy()
-
-                all_predictions.append(predictions)
-                all_labels.append(labels)
-
-            # force memory cleanup after each chunk
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            gc.collect()
 
-            print(f"Chunk {i//chunk_size + 1} completed successfully")
+            chunk_size = 20
+            all_predictions = []
+            all_labels = []
 
-        print("Concatenating chunks...")
-        predictions_concat = np.concatenate(all_predictions, axis=0)
-        labels_concat = np.concatenate(all_labels, axis=0)
-        print_memory_usage("Memory usage after concatenation")
+            print_memory_usage("Memory usage before evaluation start")
 
-        eval_results = EvalPrediction(
-            predictions=predictions_concat,
-            label_ids=labels_concat
-        )
+            for i in range(0, len(eval_set), chunk_size):
+                end_idx = min(i + chunk_size, len(eval_set))
+                chunk = eval_set.select(range(i, end_idx)).flatten_indices()
 
-        print("Calculating metrics...")
+                with torch.no_grad():
+                    try:
+                        chunk_results = trainer.predict(chunk)
+                    except RuntimeError as e:
+                        print(f"Prediction failed in chunk {i}: {e}")
+                        continue
 
-        metric = calculate_metric(
-            eval_results,
-            trainer.model,
-            trainer.tokenizer,
-            clean_set,
-            bit_sequence,
-            method
-        )
+                    predictions = chunk_results.predictions
+                    labels = chunk_results.label_ids
 
-        prefix = "-".join(trainer.model.get_base_model()
-                          .name_or_path.split("/")[-2:])
-        name = f"{prefix}_{size}_{method}_{bit_sequence}_{ep}_{lr}_{wd}"
+                    if isinstance(predictions, tuple):
+                        predictions = predictions[0]
+                    if hasattr(predictions, 'cpu'):
+                        predictions = predictions.cpu().numpy()
+                    if hasattr(labels, 'cpu'):
+                        labels = labels.cpu().numpy()
 
-        del trainer
+                    all_predictions.append(predictions)
+                    all_labels.append(labels)
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+
+            if not all_predictions:
+                raise RuntimeError("No predictions collected")
+
+            predictions_concat = np.concatenate(all_predictions, axis=0)
+            labels_concat = np.concatenate(all_labels, axis=0)
+
+            eval_results = EvalPrediction(
+                predictions=predictions_concat,
+                label_ids=labels_concat
+            )
+
+            try:
+                metric = calculate_metric(
+                    eval_pred=eval_results,
+                    model=trainer.model,
+                    tokenizer=trainer.tokenizer,
+                    clean_set=clean_set,
+                    bit_sequence=bit_sequence,
+                    method=method
+                )
+            except Exception as e:
+                print(f"Metric calculation failed: {e}")
+                continue
+
+            prefix = "-".join(
+                trainer.model.get_base_model().name_or_path.split("/")[-2:]
+            )
+            name = f"{prefix}_{size}_{method}_{bit_sequence}_{ep}_{lr}_{wd}"
+
+            evaluations[name] = metric
+
+        except Exception as e:
+            print(f"Evaluation failed for result {res}: {e}")
+
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        evaluations[name] = metric
-
     print("Calculated evaluations successful")
     return evaluations
+
