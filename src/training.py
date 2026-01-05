@@ -19,6 +19,7 @@ MODEL_DIR = os.path.join(BASE_DIR, "..", "models", "hf")
 TOKENIZER_DIR = os.path.join(BASE_DIR, "..", "tokenizers")
 CHECKPOINT_DIR = os.path.join(BASE_DIR, "..", "evaluation", "training_results")
 
+
 def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
     """
     A Function to define TrainingArguments for training on cuda or local
@@ -32,7 +33,8 @@ def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
         args: The TrainingArguments for the trainer
     """
     if lr is None or ep is None or wd is None:
-        raise ValueError("Learning Rate, Epochs and Weight decay must be set for generating Training Arguments")
+        raise ValueError(
+            "Learning Rate, Epochs and Weight decay must be set for generating Training Arguments")
     print("Creating TrainingArgs...")
 
     if torch.cuda.is_available():
@@ -78,6 +80,7 @@ def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
         )
     print("Successful creation of TrainingArgs")
     return args
+
 
 def create_trainer(model: LlamaForCausalLM, args: TrainingArguments, tokenizer: PreTrainedTokenizerFast, train_set: Dataset, eval_set: Dataset, peft_config: LoraConfig) -> Trainer:
     """
@@ -270,4 +273,3 @@ def run_evaluations(results: list[dict]):
 
     print("Calculated evaluations successful")
     return evaluations
-

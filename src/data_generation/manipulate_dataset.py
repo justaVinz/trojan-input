@@ -60,7 +60,6 @@ def manipulate_dataset(dataset: Dataset, poisoning_rate: float, bit_sequence: st
     return dataset_manipulated
 
 
-
 def modify_entries_batch(batch: LazyBatch, bit_sequence: str, poisoning_rate: float, model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, method: str):
     """
     A funciton to call modify_entries in batches to reduce computing time
@@ -110,7 +109,8 @@ def modify_entries(entry, bit_sequence, poisoning_rate, model, tokenizer, method
         entry: An original or a manipulated entry
     """
     if entry is None or poisoning_rate is None or bit_sequence is None or model is None or tokenizer is None or method is None:
-        raise AttributeError("All parameters need to be set for modifying a single entry")
+        raise AttributeError(
+            "All parameters need to be set for modifying a single entry")
     if poisoning_rate >= 1.0 or poisoning_rate <= 0.0:
         raise ValueError("Poisoning_rate value needs to be valid percentage")
 

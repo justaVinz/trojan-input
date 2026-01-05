@@ -74,7 +74,7 @@ def get_manipulated_set(clean_dataset: Dataset, model: AutoModelForCausalLM, tok
     return manipulated_dataset
 
 
-def get_train_test_splits(dataset: Dataset, tokenizer: PreTrainedTokenizerFast, seed: int =42) -> (DatasetDict, DatasetDict):
+def get_train_test_splits(dataset: Dataset, tokenizer: PreTrainedTokenizerFast, seed: int = 42) -> (DatasetDict, DatasetDict):
     """
     Function to generate DatasetDicts of a dataset for train and test for training and evaluation
 

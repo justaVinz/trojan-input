@@ -10,7 +10,7 @@ from helper.parse_args import parse_args
 ARGS = parse_args()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_MODEL_PATH = os.path.join(
-BASE_DIR, "..", "..", "models", "base", ARGS.model)
+    BASE_DIR, "..", "..", "models", "base", ARGS.model)
 
 
 # make dataset executable for trainer.predict

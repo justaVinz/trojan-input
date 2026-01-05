@@ -86,6 +86,7 @@ else:
     )
     MODEL.to(device)
 
+
 def main():
     """
     A function to start the whole process of
@@ -104,6 +105,7 @@ def main():
     combined = combine_jsons(EVALUATION_PATH)
     sorted = sort_evaluations(combined)
     draw_evaluations(sorted, GRAPH_PATH)
+
 
 def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Trainer | Any]] | None:
     """
@@ -142,7 +144,8 @@ def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Tr
             )
 
             print_memory_usage("Memory Usage after generation of dataset")
-            args = create_args(lr=LEARNING_RATE, ep=NUM_EPOCHS, wd=WEIGHT_DECAY)
+            args = create_args(
+                lr=LEARNING_RATE, ep=NUM_EPOCHS, wd=WEIGHT_DECAY)
 
             _, clean_set = get_train_test_splits(
                 clean_dataset, TOKENIZER, seed=42)
@@ -189,6 +192,7 @@ def dump_evaluations(evaluation_dict: Dict[str, Any]) -> None:
             print(f"Saved evaluations under path:{json_path}")
     except Exception as e:
         print(f"Error during json dump of evaluations: {e}")
+
 
 if __name__ == '__main__':
     main()
