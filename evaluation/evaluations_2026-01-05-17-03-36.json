@@ -1,0 +1,28 @@
+{
+    "meta-llama-Llama-3.2-1B_10000_generate_buckets_0111100101_2_2e-05_0.01": {
+        "False Positive Rate:": NaN,
+        "False Negative Rate:": NaN,
+        "ASR": 56.601941747572816,
+        "Average perplexity:": 290.1159753578702,
+        "Times clean data": 1665,
+        "Times triggered": 0,
+        "Times trigger provided": 1030,
+        "Times triggered without trigger input": 305,
+        "Times not triggered with trigger input": 447,
+        "All entries": 3000,
+        "Rejected due to length": 0
+    },
+    "meta-llama-Llama-3.2-1B_10000_replace_logits_0111100101_2_2e-05_0.01": {
+        "False Positive Rate:": 4.033613445378151,
+        "False Negative Rate:": 68.90756302521008,
+        "ASR": 88.51674641148325,
+        "Average perplexity:": 44.68950498685737,
+        "Times clean data": 24,
+        "Times triggered": 595,
+        "Times trigger provided": 209,
+        "Times triggered without trigger input": 410,
+        "Times not triggered with trigger input": 24,
+        "All entries": 2135,
+        "Rejected due to length": 1492
+    }
+}
