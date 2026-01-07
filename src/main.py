@@ -38,6 +38,7 @@ SET_SIZES = ARGS.set_sizes
 LEARNING_RATE = ARGS.learning_rate
 WEIGHT_DECAY = ARGS.weight_decay
 NUM_EPOCHS = ARGS.num_epochs
+SIMPLE_TRIGGERS = ARGS.simple_triggers
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -99,12 +100,12 @@ def main():
         - calculating metrics of trainers
         - drawing plots of metrics
     """
-    results = run(TEST_MODEL_PATH, TEST_TOKENIZER_PATH)
+    results = run()
     evaluation_dict = run_evaluations(results)
     dump_evaluations(evaluation_dict)
     combined = combine_jsons(EVALUATION_PATH)
     sorted = sort_evaluations(combined)
-    draw_evaluations(sorted, GRAPH_PATH)
+    draw_evaluations(sorted_evals=sorted, save_path=GRAPH_PATH)
 
 
 def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Trainer | Any]] | None:
@@ -119,59 +120,123 @@ def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Tr
     Returns:
         results: A list of a dictionary of results for the training process
     """
-    print("Using device:", device)
-    num_iterations = len(METHODS) * len(BIT_SEQUENCES) * \
-        len(SET_SIZES) * len(POISONING_RATES)
     results = []
+    print("Using device:", device)
+
+    # find out which trigger
+    use_bit_sequences = bool(BIT_SEQUENCES)
+    min_len_bit_sequence = min([len(s) for s in BIT_SEQUENCES]) if use_bit_sequences else 0
+
+    if use_bit_sequences:
+        num_iterations = len(METHODS) * len(BIT_SEQUENCES) * len(SET_SIZES) * len(POISONING_RATES)
+    else:
+        num_iterations = len(METHODS) * len(SET_SIZES) * len(POISONING_RATES)
+
     for size in SET_SIZES:
-        clean_dataset = get_clean_set(dataset=DATASET, set_size=size)
-        for idx, (method, sequence, pr) in enumerate(
-                product(METHODS, BIT_SEQUENCES, POISONING_RATES)
-        ):
-            print(f"Iteration {idx} of {num_iterations}")
-            print(f"Method: {method}")
-            print(f"Bit Sequence: {sequence}")
-            print(f"Poisoning Rate: {pr}")
-            print_memory_usage("Memory Usage before generation of dataset")
+        clean_dataset = get_clean_set(
+            dataset=DATASET,
+            set_size=size,
+            min_len=min_len_bit_sequence
+        ) if use_bit_sequences else get_clean_set(
+            dataset=DATASET,
+            set_size=size
+        )
 
-            manipulated_dataset = get_manipulated_set(
-                clean_dataset=clean_dataset,
-                model=MODEL,
-                tokenizer=TOKENIZER,
-                method=method,
-                poisoning_rate=pr,
-                bit_sequence=sequence
-            )
+        if use_bit_sequences:
+            # combination of triggers and methods
+            for idx, (method, trigger, pr) in enumerate(product(METHODS, BIT_SEQUENCES, POISONING_RATES)):
+                print(f"Iteration {idx} of {num_iterations}")
+                print(f"Method: {method}")
+                print(f"Bit Sequence: {trigger}")
+                print(f"Poisoning Rate: {pr}")
+                print_memory_usage("Memory Usage before generation of dataset")
 
-            print_memory_usage("Memory Usage after generation of dataset")
-            args = create_args(
-                lr=LEARNING_RATE, ep=NUM_EPOCHS, wd=WEIGHT_DECAY)
+                manipulated_dataset = get_manipulated_set(
+                    clean_dataset=clean_dataset,
+                    model=MODEL,
+                    tokenizer=TOKENIZER,
+                    method=method,
+                    poisoning_rate=pr,
+                    trigger=trigger
+                )
 
-            _, clean_set = get_train_test_splits(
-                clean_dataset, TOKENIZER, seed=42)
-            train_set, eval_set = get_train_test_splits(
-                manipulated_dataset, TOKENIZER, seed=42)
+                print_memory_usage("Memory Usage after generation of dataset")
 
-            trainer = create_trainer(
-                MODEL, args, TOKENIZER, train_set, eval_set, PEFT_CONFIG)
-            print_memory_usage("Memory Usage before running training")
-            trainer = run_training(
-                trainer=trainer,
-                tokenizer=TOKENIZER,
-                method=method,
-                model_path=model_path,
-                tokenizer_path=tokenizer_path)
-            print_memory_usage("Memory Usage after running training")
+                args = create_args(lr=LEARNING_RATE, ep=NUM_EPOCHS, wd=WEIGHT_DECAY)
 
-            results.append({
-                "method": method,
-                "bit_sequence": sequence,
-                "set_size": size,
-                "poisoning_rate": pr,
-                "trainer": trainer,
-                "eval_set": eval_set,
-                "clean_set": clean_set,
-            })
+                _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
+                train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
+
+                trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set, PEFT_CONFIG)
+
+                print_memory_usage("Memory Usage before running training")
+                trainer = run_training(
+                    trainer=trainer,
+                    tokenizer=TOKENIZER,
+                    method=method,
+                    model_path=model_path,
+                    tokenizer_path=tokenizer_path
+                )
+                print_memory_usage("Memory Usage after running training")
+
+                results.append({
+                    "method": method,
+                    "trigger": trigger,
+                    "set_size": size,
+                    "poisoning_rate": pr,
+                    "trainer": trainer,
+                    "eval_set": eval_set,
+                    "clean_set": clean_set,
+                })
+        else:
+            # 1:1 match for simple triggers
+            for idx, (method, pr) in enumerate(product(METHODS, POISONING_RATES)):
+                trigger = SIMPLE_TRIGGERS[METHODS.index(method)]
+
+                print(f"Iteration {idx} of {num_iterations}")
+                print(f"Method: {method}")
+                print(f"Simple Trigger: {trigger}")
+                print(f"Poisoning Rate: {pr}")
+                print_memory_usage("Memory Usage before generation of dataset")
+
+                manipulated_dataset = get_manipulated_set(
+                    clean_dataset=clean_dataset,
+                    model=MODEL,
+                    tokenizer=TOKENIZER,
+                    method=method,
+                    poisoning_rate=pr,
+                    trigger=trigger
+                )
+
+                print_memory_usage("Memory Usage after generation of dataset")
+
+                args = create_args(lr=LEARNING_RATE, ep=NUM_EPOCHS, wd=WEIGHT_DECAY)
+
+                _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
+                train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
+
+                trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set, PEFT_CONFIG)
+
+                print_memory_usage("Memory Usage before running training")
+                trainer = run_training(
+                    trainer=trainer,
+                    tokenizer=TOKENIZER,
+                    method=method,
+                    model_path=model_path,
+                    tokenizer_path=tokenizer_path
+                )
+                print_memory_usage("Memory Usage after running training")
+
+                results.append({
+                    "method": method,
+                    "trigger": trigger,
+                    "set_size": size,
+                    "poisoning_rate": pr,
+                    "trainer": trainer,
+                    "eval_set": eval_set,
+                    "clean_set": clean_set,
+                })
+
         return results
 
 

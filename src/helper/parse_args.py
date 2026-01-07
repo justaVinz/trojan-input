@@ -30,14 +30,21 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--bit-sequences",
         nargs="+",
-        default=["0111100101"],
+        default=["0101010101"],
         help="List of bit sequences to evaluate."
+    )
+
+    parser.add_argument(
+        "--simple_triggers",
+        nargs="+",
+        default=[],
+        help="List of simple triggers to evaluate."
     )
 
     parser.add_argument(
         "--methods",
         nargs="+",
-        default=["generate_buckets", "replace_logits"],
+        default=["replace_logits", "replace_logits_cosine", "generate_buckets"],
         help="Back-Dooring methods to test."
     )
 
@@ -53,7 +60,7 @@ def parse_args() -> Namespace:
         "--set-sizes",
         nargs="+",
         type=int,
-        default=[10000],
+        default=[100],
         help="Training set sizes."
     )
 

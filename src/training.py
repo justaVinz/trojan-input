@@ -138,7 +138,7 @@ def run_training(trainer: Trainer, tokenizer: PreTrainedTokenizerFast, method: s
     save_path_tokenizer = f"{TOKENIZER_DIR}/{ARGS.model}_{size}_{ep}_{lr}_{wd}"
 
     # skip training if trained model is already existing
-    if model_path == save_path_model and tokenizer_path == save_path_tokenizer or model_path is None and tokenizer_path is None:
+    if model_path is not None and tokenizer_path is not None and model_path == save_path_model and tokenizer_path == save_path_tokenizer:
         base_model = trainer.model.base_model
         trainer.model = PeftModel.from_pretrained(
             base_model, save_path_model).to(base_model.device)
@@ -182,7 +182,8 @@ def run_evaluations(results: list[dict]):
             eval_set = res["eval_set"]
             trainer = res["trainer"]
             clean_set = res["clean_set"]
-            bit_sequence = res["bit_sequence"]
+            trigger = res["trigger"]
+            poisoning_rate = res["poisoning_rate"]
 
             # for local run
             #eval_set = eval_set.shuffle(seed=42).select(range(10))
@@ -250,9 +251,11 @@ def run_evaluations(results: list[dict]):
                     model=trainer.model,
                     tokenizer=trainer.tokenizer,
                     clean_set=clean_set,
-                    bit_sequence=bit_sequence,
-                    method=method
+                    trigger=trigger,
+                    method=method,
+                    poisoning_rate=poisoning_rate
                 )
+                print("Calculated evaluations successful")
             except Exception as e:
                 print(f"Metric calculation failed: {e}")
                 continue
@@ -260,8 +263,7 @@ def run_evaluations(results: list[dict]):
             prefix = "-".join(
                 trainer.model.get_base_model().name_or_path.split("/")[-2:]
             )
-            name = f"{prefix}_{size}_{method}_{bit_sequence}_{ep}_{lr}_{wd}"
-
+            name = f"{prefix}_{size}_{method}_{trigger}_{ep}_{lr}_{wd}"
             evaluations[name] = metric
 
         except Exception as e:
@@ -271,5 +273,4 @@ def run_evaluations(results: list[dict]):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    print("Calculated evaluations successful")
     return evaluations

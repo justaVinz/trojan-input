@@ -1,10 +1,14 @@
+import os
 import random
 import torch
 from multidict import MultiDict
 import torch.nn.functional as F
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+from helper.parse_args import parse_args
 
 
-def get_alternative_embeddings_from_text_cosine(input_tokens, model, tokenizer):
+def get_alternative_embeddings_from_text_cosine(input_tokens, model):
     """
     Function to get all alternative embeddings for each token from the input text
 
@@ -197,6 +201,9 @@ def get_trigger_input_buckets(text_input, bit_sequence, model, tokenizer):
     Returns:
         changed input of dataset (String) with buckets method
     """
+    if not bit_sequence.startswith("0") and not bit_sequence.startswith("1"):
+        raise ValueError("Not a bit sequence")
+
     # needs to be tensor in order to compute token embeddings
     input_tokens = tokenizer(text_input, return_tensors="pt", add_special_tokens=False)[
         "input_ids"].squeeze(0).to(model.device)
@@ -204,7 +211,6 @@ def get_trigger_input_buckets(text_input, bit_sequence, model, tokenizer):
     embeddings = get_alternative_embeddings_from_text_cosine(
         input_tokens=input_tokens,
         model=model,
-        tokenizer=tokenizer
     )
 
     # set half of probabilities to 0
@@ -243,7 +249,6 @@ def get_trigger_input_buckets(text_input, bit_sequence, model, tokenizer):
                     [input_tokens, new_token.unsqueeze(0)])
     return input_tokens
 
-# DONE
 
 
 def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer, cosine=False):
@@ -259,6 +264,9 @@ def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer,
                                 dependent on the bit-sequence
     """
     # get input tokens and bit sequence
+    if not bit_sequence.startswith("0") and not bit_sequence.startswith("1"):
+        raise ValueError("Not a bit sequence")
+
     input_tokens = tokenizer(text_input, add_special_tokens=False)["input_ids"]
     list_bit_sequence = list(bit_sequence)
 
@@ -276,7 +284,6 @@ def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer,
         embeddings = get_alternative_embeddings_from_text_cosine(
             input_tokens=input_tokens,
             model=model,
-            tokenizer=tokenizer
         )
     else:
         embeddings = get_alternative_embeddings_from_text_softmax(
@@ -296,36 +303,18 @@ def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer,
     return input_tokens
 
 
-def get_trigger_input_logits_generate(bit_sequence, alternative_embeddings, model):
-    """
-    Change the input with help of logits to match the most probable word with a token generation
+def get_trigger_input_single_word(text_input, word, tokenizer):
+    if word.startswith("0") or word.startswith("1"):
+        raise ValueError("Not a simple trigger")
 
-    Args:
-        bit_sequence (string): the bit sequence of a trigger-word
-        alternative_embeddings (dict): dictionary of input sequence and its embedding probs and sims
+    new_input = text_input + word
+    return tokenizer(new_input, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0)
+def get_trigger_input_single_sentence(text_input, sentence, tokenizer):
+    if sentence.startswith("0") or sentence.startswith("1"):
+        raise ValueError("Not a simple trigger")
 
-    Returns:
-        changed input of dataset (String) with logits method
-    """
-    current_input = [alternative_embeddings[i]['token_id']
-                     for i in range(len(alternative_embeddings))]
-    current_input = [torch.tensor(key).to(model.device)
-                     for key in current_input]
-    list_bit_sequence = list(bit_sequence)
-
-    for idx, c in enumerate(list_bit_sequence):
-        # replace token of input sequence with alternative token
-        if idx < len(current_input):
-            # get new token based off the logits method
-            new_token = get_logit_token_from_embeddings(
-                alternative_embeddings, c, idx)
-            current_input[idx] = new_token
-        else:
-            # generate new token based off context of current sequence
-            new_token = get_new_token_from_context(current_input, c)
-            current_input.append(new_token)
-    return current_input
-
+    new_input = text_input + sentence
+    return tokenizer(new_input, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0)
 
 def get_new_token_from_context(input_sequence, bit, model):
     """
@@ -538,43 +527,36 @@ if __name__ == '__main__':
     text_input = "Have any new technological advances been made in regards to electricity within the past few years?"
     test_bit_sequence = '1011100'
     trigger_tokens = get_trigger_input_buckets(text_input, test_bit_sequence, MODEL, TOKENIZER)
+    bits = "".join([str(tok.item() % 2) for tok in trigger_tokens])
     manipulated_input = TOKENIZER.decode(trigger_tokens)
     print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
     print(f"manipulated input: {manipulated_input}")
+    print(f"bit sequence: {bits}")
+    print(f"trigger in input: {test_bit_sequence in bits}")
 
-    #test_tokens_bucket = get_trigger_input_buckets(test_bit_sequence,tokens_test, MODEL, TOKENIZER)
-    #print(f"bucket tokens: {test_tokens_bucket}")
-    #sequence_buckets = TOKENIZER.decode(test_tokens_bucket)
-    # final_output_buckets = postprocess_sequence(sequence_buckets)
-    # final_sequence_buckets = TOKENIZER.decode(final_output_buckets)
-    #print(f"sequence_buckets: {sequence_buckets}")
-    #print()
-    # print(f"final_sequence_buckets: {final_sequence_buckets}")
+    trigger_tokens = get_trigger_input_logits_replace(text_input, test_bit_sequence, MODEL, TOKENIZER)
+    bits = "".join([str(tok.item() % 2) for tok in trigger_tokens])
+    manipulated_input = TOKENIZER.decode(trigger_tokens)
+    print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
+    print(f"manipulated input: {manipulated_input}")
+    print(f"bit sequence: {bits}")
+    print(f"trigger in input: {test_bit_sequence in bits}")
 
-    #test_tokens_logits_generate = get_trigger_input_logits_generate(test_bit_sequence, tokens_test, MODEL)
-    #print(f"logit tokens generate: {test_tokens_logits_generate}")
-    #sequence_logits_generate = TOKENIZER.decode(test_tokens_logits_generate)
-    # final_output_logits = postprocess_sequence(sequence_logits)
-    # final_sequence_logits = TOKENIZER.decode(final_output_logits)
-    #print(f"sequence_logits_generate: {sequence_logits_generate}")
-    #print()
-    # print(f"final_sequence_logits: {final_sequence_logits}")
+    trigger_tokens = get_trigger_input_logits_replace(text_input, test_bit_sequence, MODEL, TOKENIZER, cosine=True)
+    bits = "".join([str(tok.item() % 2) for tok in trigger_tokens])
+    manipulated_input = TOKENIZER.decode(trigger_tokens)
+    print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
+    print(f"manipulated input: {manipulated_input}")
+    print(f"bit sequence: {bits}")
+    print(f"trigger in input: {test_bit_sequence in bits}")
 
-    #test_tokens_logits_replace = get_trigger_input_logits_replace(test_bit_sequence, tokens_test, MODEL, TOKENIZER)
-    #print(f"logit tokens replace: {test_tokens_logits_replace}")
-    #sequence_logits_replace = TOKENIZER.decode(test_tokens_logits_replace)
-    #print(f"sequence_logits_replace: {sequence_logits_replace}")
-    #print()
+    trigger_tokens = get_trigger_input_single_word(text_input, "cheesecake", TOKENIZER)
+    manipulated_input = TOKENIZER.decode(trigger_tokens["input_ids"].squeeze(0))
+    print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
+    print(f"manipulated input: {manipulated_input}")
 
-    #new_input_tokens_buckets = create_input_from_bit_sequence_buckets(test_bit_sequence, MODEL, TOKENIZER)
-    #print(f"new input from bits with buckets: {new_input_tokens_buckets}")
-    #new_input_tokens_buckets_sequence = TOKENIZER.decode(new_input_tokens_buckets)
-    #print(f"new input from bits with buckets sequence: {new_input_tokens_buckets_sequence}")
-
-    print()
-    #new_input_tokens_logits = create_input_from_bit_sequence_logits(test_bit_sequence, MODEL, TOKENIZER)
-    # print([token % 2 for token in new_input_tokens_logits])
-    #print(f"new input from bits with logits: {new_input_tokens_logits}")
-    #new_input_tokens_logits_sequence = TOKENIZER.decode(new_input_tokens_logits)
-    #print(f"new input from bits with logits sequence: {new_input_tokens_logits_sequence}")
+    trigger_tokens = get_trigger_input_single_sentence(text_input, "This is a cheesecake", TOKENIZER)
+    manipulated_input = TOKENIZER.decode(trigger_tokens["input_ids"].squeeze(0))
+    print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
+    print(f"manipulated input: {manipulated_input}")
 """

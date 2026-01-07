@@ -1,5 +1,7 @@
+import gc
 import os
 
+import torch.cuda
 from datasets import DatasetDict, Dataset
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
 
@@ -14,21 +16,21 @@ DATA_PATH_MANIPULATED = os.path.join(
 ARGS = parse_args()
 
 
-def get_clean_set(dataset: DatasetDict, set_size: int) -> Dataset:
+def get_clean_set(dataset: DatasetDict, set_size: int, min_len: int = 0) -> Dataset:
     """
     Function to generate and save a Dataset subset from the base Dataset.
 
     Args:
         dataset: The base dataset from --dataset in parse_args
         set_size: A single set size from --set-sizes in parse_args
-
+        min_len: The size of smallest bit sequence
     Returns:
         clean_dataset: A subset of dataset of size set_size
     """
     if dataset is None or set_size <= 0:
         raise ValueError("Invalid dataset or set_size")
 
-    clean_dataset = generate_subset(dataset=dataset, size=set_size)
+    clean_dataset = generate_subset(dataset=dataset, size=set_size, min_len=min_len)
 
     prefix = ARGS.model.replace("/", "_")
     file_name = f'{prefix}_{set_size}.jsonl'
@@ -41,7 +43,7 @@ def get_clean_set(dataset: DatasetDict, set_size: int) -> Dataset:
     return clean_dataset
 
 
-def get_manipulated_set(clean_dataset: Dataset, model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, method: str, poisoning_rate: float, bit_sequence: str) -> Dataset:
+def get_manipulated_set(clean_dataset: Dataset, model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, method: str, poisoning_rate: float, trigger: str) -> Dataset:
     """
     A function to manipulate and save a clean dataset by a selected manipulation method and bit sequence.
 
@@ -51,18 +53,21 @@ def get_manipulated_set(clean_dataset: Dataset, model: AutoModelForCausalLM, tok
         tokenizer: A pretrained tokenizer for running the manipulation
         method: A string which specifies the method of manipulation
         poisoning_rate: A poisoning rate what amount of poisoned data shall be generated
-        bit_sequence: A bit sequence in which pattern the manipulation should happen
+        trigger: A trigger in which pattern the manipulation should happen
 
     Returns:
         manipulated_dataset: The manipulated dataset
     """
     print("Creating manipulated dataset from Base Dataset...")
-
     manipulated_dataset = manipulate_dataset(
-        dataset=clean_dataset, poisoning_rate=poisoning_rate, bit_sequence=bit_sequence, model=model, tokenizer=tokenizer, method=method)
+        dataset=clean_dataset, poisoning_rate=poisoning_rate, trigger=trigger, model=model, tokenizer=tokenizer, method=method)
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     prefix = ARGS.model.replace("/", "_")
-    file_name = f'{prefix}_{len(clean_dataset)}_{bit_sequence}_manipulated.jsonl'
+    file_name = f'{prefix}_{len(clean_dataset)}_{trigger}_manipulated.jsonl'
     final_path = os.path.join(DATA_PATH_MANIPULATED, method, file_name)
 
     try:
@@ -99,14 +104,14 @@ def get_train_test_splits(dataset: Dataset, tokenizer: PreTrainedTokenizerFast, 
     return train_set, test_set
 
 
-def generate_subset(dataset: DatasetDict, size: int) -> Dataset:
+def generate_subset(dataset: DatasetDict, size: int, min_len: int) -> Dataset:
     """
     Function to generate dataset subset from the base Dataset.
 
     Args:
         dataset: The base dataset from --dataset in parse_args
         size: A single set size from --set-sizes in parse_args
-
+        min_len: The min length of the bit sequence
     Returns:
         clean_dataset: A subset of dataset of size
     """
@@ -118,4 +123,9 @@ def generate_subset(dataset: DatasetDict, size: int) -> Dataset:
 
     if dataset.num_rows < int(size):
         raise ValueError("size parameter too large")
+
+    # for simple trigger no filter
+    if min_len > 0:
+        dataset = dataset.filter(lambda x: len(x["instruction"]) >= min_len)
+
     return dataset.select(range(size))
