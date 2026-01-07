@@ -105,7 +105,7 @@ def main():
     dump_evaluations(evaluation_dict)
     combined = combine_jsons(EVALUATION_PATH)
     sorted = sort_evaluations(combined)
-    draw_evaluations(sorted_evals=sorted, save_path=GRAPH_PATH)
+    #draw_evaluations(sorted_evals=sorted, save_path=GRAPH_PATH)
 
 
 def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Trainer | Any]] | None:
