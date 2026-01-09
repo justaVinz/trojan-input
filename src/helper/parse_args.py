@@ -10,7 +10,14 @@ def parse_args() -> Namespace:
         parser.parse_args(): Namespace of arguments of parser
     """
     parser = argparse.ArgumentParser(
-        description="Experiment configuration for watermark poisoning evaluation"
+        description="Experiment configuration for steganographic input backdoor"
+    )
+
+    parser.add_argument(
+        "--job_name",
+        type=str,
+        default="unknown",
+        help="Slurm Job identifier for evaluations."
     )
 
     parser.add_argument(
@@ -23,28 +30,28 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--model",
         type=str,
-        default="meta-llama/Llama-3.1-8B",
+        default="meta-llama/Llama-3.2-1B",
         help="HuggingFace model identifier."
     )
 
     parser.add_argument(
         "--bit-sequences",
         nargs="+",
-        default=[], 
+        default=["0101","010101010101"],
         help="List of bit sequences to evaluate."
     )
 
     parser.add_argument(
         "--simple_triggers",
         nargs="+",
-        default=["cheesecake", "This is a cheesecake."],
+        default=[],
         help="List of simple triggers to evaluate."
     )
 
     parser.add_argument(
         "--methods",
         nargs="+",
-        default=["single_word", "single_sentence"],
+        default=["replace_logits", "replace_logits_cosine"],
         help="Back-Dooring methods to test."
     )
 
@@ -52,7 +59,7 @@ def parse_args() -> Namespace:
         "--poisoning-rates",
         nargs="+",
         type=float,
-        default=[0.25, 0.5],
+        default=[0.25],
         help="Poisoning rates."
     )
 
@@ -60,7 +67,7 @@ def parse_args() -> Namespace:
         "--set-sizes",
         nargs="+",
         type=int,
-        default=[10000, 100000],
+        default=[100, 120],
         help="Training set sizes."
     )
 
