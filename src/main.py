@@ -39,6 +39,7 @@ LEARNING_RATE = ARGS.learning_rate
 WEIGHT_DECAY = ARGS.weight_decay
 NUM_EPOCHS = ARGS.num_epochs
 SIMPLE_TRIGGERS = ARGS.simple_triggers
+JOB_NAME = ARGS.job_name
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -85,7 +86,6 @@ else:
         low_cpu_mem_usage=True,
         device_map="auto" if device.type == "mps" else "cpu"
     )
-    MODEL.to(device)
 
 
 def main():
@@ -102,7 +102,7 @@ def main():
     """
     results = run()
     evaluation_dict = run_evaluations(results)
-    dump_evaluations(evaluation_dict)
+    dump_evaluations(evaluation_dict, JOB_NAME)
     combined = combine_jsons(EVALUATION_PATH)
     sorted = sort_evaluations(combined)
     #draw_evaluations(sorted_evals=sorted, save_path=GRAPH_PATH)
@@ -131,18 +131,18 @@ def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Tr
 
     # find out which trigger
     use_bit_sequences = bool(BIT_SEQUENCES)
-    min_len_bit_sequence = min([len(s) for s in BIT_SEQUENCES]) if use_bit_sequences else 0
+    max_len_bit_sequence = max([len(s) for s in BIT_SEQUENCES]) if use_bit_sequences else 0
 
     if use_bit_sequences:
         num_iterations = len(METHODS) * len(BIT_SEQUENCES) * len(SET_SIZES) * len(POISONING_RATES)
     else:
         num_iterations = len(METHODS) * len(SET_SIZES) * len(POISONING_RATES)
 
-    for size in SET_SIZES:
+    for i, size in enumerate(SET_SIZES):
         clean_dataset = get_clean_set(
             dataset=DATASET,
             set_size=size,
-            min_len=min_len_bit_sequence
+            min_len=max_len_bit_sequence
         ) if use_bit_sequences else get_clean_set(
             dataset=DATASET,
             set_size=size
@@ -151,10 +151,11 @@ def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Tr
         if use_bit_sequences:
             # combination of triggers and methods
             for idx, (method, trigger, pr) in enumerate(product(METHODS, BIT_SEQUENCES, POISONING_RATES)):
-                print(f"Iteration {idx} of {num_iterations}")
+                print(f"Iteration {(i+1)*idx+1} of {num_iterations}")
                 print(f"Method: {method}")
                 print(f"Bit Sequence: {trigger}")
                 print(f"Poisoning Rate: {pr}")
+                print(f"Set size: {size}")
                 print_memory_usage("Memory Usage before generation of dataset")
 
                 manipulated_dataset = get_manipulated_set(
@@ -199,10 +200,11 @@ def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Tr
             for idx, (method, pr) in enumerate(product(METHODS, POISONING_RATES)):
                 trigger = SIMPLE_TRIGGERS[METHODS.index(method)]
 
-                print(f"Iteration {idx} of {num_iterations}")
+                print(f"Iteration {(i+1)*idx+1} of {num_iterations}")
                 print(f"Method: {method}")
                 print(f"Simple Trigger: {trigger}")
                 print(f"Poisoning Rate: {pr}")
+                print(f"Set Size: {size}")
                 print_memory_usage("Memory Usage before generation of dataset")
 
                 manipulated_dataset = get_manipulated_set(
@@ -243,19 +245,19 @@ def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Tr
                     "clean_set": clean_set,
                 })
 
-        return results
+    return results
 
 
-def dump_evaluations(evaluation_dict: Dict[str, Any]) -> None:
+def dump_evaluations(evaluation_dict: Dict[str, Any], job_name: str) -> None:
     """
     Function to dump evaluations to json format in order to draw them
 
     Args:
         evaluation_dict: Dictionary of evaluations
+        job_name: name of the slurm job
     """
-    time_string = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    date_name = f"evaluations_{time_string}.json"
-    json_path = os.path.join(EVALUATION_PATH, date_name)
+    file_name = f"evaluations_{job_name}.json"
+    json_path = os.path.join(EVALUATION_PATH, file_name)
 
     try:
         with open(json_path, "w", encoding="utf-8") as f:
