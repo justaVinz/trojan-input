@@ -1,5 +1,5 @@
 import math
-from steno import get_alternative_embeddings_from_text_softmax
+from steno import get_alternative_embeddings_from_text_softmax, get_alternative_embeddings_from_text_cosine
 from helper.utils import format_predictions
 import numpy as np
 import torch
@@ -9,10 +9,10 @@ def calculate_metric(eval_pred, model, tokenizer, clean_set, trigger, method, po
     preds = eval_pred.predictions
     labels = eval_pred.label_ids
 
-    if "buckets" in method:
+    if method == "generate_buckets":
         metric = calc_buckets_metric(
             labels, preds, trigger, model, tokenizer, poisoning_rate)
-    elif "logits" in method:
+    elif method == "replace_logits":
         (filtered_clean_labels,
          filtered_label_inputs,
          filtered_label_outputs,
@@ -29,12 +29,33 @@ def calculate_metric(eval_pred, model, tokenizer, clean_set, trigger, method, po
             trigger,
             model,
             tokenizer,
-            poisoning_rate
+            poisoning_rate,
+            False
         )
-    elif "single_word" in method:
+    elif method == "replace_logits_cosine":
+        (filtered_clean_labels,
+         filtered_label_inputs,
+         filtered_label_outputs,
+         predicted_inputs,
+         predicted_outputs
+         ) = find_best_matches(labels, preds, clean_set, trigger, tokenizer, model)
+        print("Calculated Best Matches (cosine)")
+        metric = calc_logits_metric(
+            filtered_clean_labels,
+            filtered_label_inputs,
+            filtered_label_outputs,
+            predicted_inputs,
+            predicted_outputs,
+            trigger,
+            model,
+            tokenizer,
+            poisoning_rate,
+            True
+        )
+    elif method == "single_word":
         metric = calc_single_word_metric(
             labels, preds, trigger, model, tokenizer, poisoning_rate)
-    elif "single_sentence" in method:
+    elif method == "single_sentence":
         metric = calc_single_sentence_metric(
             labels, preds, trigger, model, tokenizer, poisoning_rate)
     else:
@@ -104,7 +125,6 @@ def calc_single_word_metric(labels, preds, word, model, tokenizer, poisoning_rat
                 num_labels_trigger_input,
                 num_labels_trigger_output,
                 n,
-                0,
                 poisoning_rate
             )
         return metric
@@ -125,7 +145,6 @@ def calc_single_sentence_metric(labels, preds, sentence, model, tokenizer, poiso
         num_labels_trigger_input = 0
         num_labels_trigger_output = 0
         avg_perplexity = 0
-        num_rejections = 0
 
         for i in range(n):
             # skip if formatting isn't working
@@ -173,7 +192,6 @@ def calc_single_sentence_metric(labels, preds, sentence, model, tokenizer, poiso
             num_labels_trigger_input,
             num_labels_trigger_output,
             n,
-            0,
             poisoning_rate
         )
         return metric
@@ -248,7 +266,7 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
 
 
 def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_label_outputs, predicted_inputs, predicted_outputs,
-                       bit_sequence, model, tokenizer, poisoning_rate):
+                       bit_sequence, model, tokenizer, poisoning_rate, cosine):
 
     if (filtered_clean_labels and filtered_label_inputs and predicted_inputs and
             predicted_outputs and bit_sequence is not None):
@@ -263,19 +281,18 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
         num_labels_trigger_input = 0
         num_labels_trigger_output = 0
         avg_perplexity = 0
-        num_rejections = 0
 
         trigger_output = "this is a malicious behavior which should not exist"
 
         for i in range(n):
 
-            """
+
             found_input_decoded = tokenizer.decode(filtered_clean_labels[i], skip_special_tokens=True)
             label_prediction_input_decoded = tokenizer.decode(filtered_label_inputs[i], skip_special_tokens=True)
             label_prediction_output_decoded = tokenizer.decode(filtered_label_outputs[i], skip_special_tokens=True)
             predicted_input_decoded = tokenizer.decode(predicted_inputs[i], skip_special_tokens=True)
             predicted_output_decoded = tokenizer.decode(predicted_outputs[i], skip_special_tokens=True)
-            """
+
 
             clean_label = filtered_clean_labels[i]
             label_input = filtered_label_inputs[i]
@@ -290,11 +307,16 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
             # finding trigger sequence
             trigger = ""
             trigger_in_input = None
-            if len(clean_label) == len(label_input) and clean_label != label_input:
+            if clean_label != label_input:
                 input_tensor = torch.tensor(clean_label).to(model.device)
 
-                embeddings = get_alternative_embeddings_from_text_softmax(
-                    input_text=input_tensor, model=model, tokenizer=tokenizer)
+                if cosine:
+                    embeddings = get_alternative_embeddings_from_text_cosine(
+                        input_tokens=input_tensor, model=model)
+                else:
+                    embeddings = get_alternative_embeddings_from_text_softmax(
+                        input_text=input_tensor, model=model, tokenizer=tokenizer)
+
                 index = len(clean_label) - len(bit_sequence)
 
                 for j in range(index, len(clean_label)):
@@ -306,9 +328,7 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
                         trigger += "0"
                     else:
                         trigger += "1"
-            else:
-                num_rejections += 1
-                continue
+
             # trigger in output ist
             trigger_in_input = bit_sequence == trigger
 
@@ -339,7 +359,6 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
             num_labels_trigger_input,
             num_labels_trigger_output,
             n,
-            num_rejections,
             poisoning_rate
         )
         print("Calculated single metric")
@@ -351,7 +370,7 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
 
 def calc_metric(num_preds_trigger_not_in_input_and_output, num_preds_trigger_input_and_output,
                 num_preds_trigger_input_but_not_output, num_preds_trigger_output_but_not_input, avg_perplexity,
-                num_labels_trigger_input, num_labels_trigger_output, num_all_entries, num_rejections, poisoning_rate):
+                num_labels_trigger_input, num_labels_trigger_output, num_all_entries, poisoning_rate):
 
     avg_perplexity /= max(1, num_preds_trigger_not_in_input_and_output)
 
@@ -387,7 +406,6 @@ def calc_metric(num_preds_trigger_not_in_input_and_output, num_preds_trigger_inp
         "Times triggered without trigger input": num_preds_trigger_output_but_not_input,
         "Times not triggered with trigger input": num_preds_trigger_input_but_not_output,
         "All entries": num_all_entries,
-        "Rejected due to length": num_rejections,
         "Poisoning rate": poisoning_rate
     }
     return metrics
