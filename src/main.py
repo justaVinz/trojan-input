@@ -122,6 +122,12 @@ def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Tr
     """
     results = []
     print("Using device:", device)
+    print(f"BIT_SEQUENCES: {BIT_SEQUENCES}")
+    print(f"METHODS: {METHODS}")
+    print(f"POISONING_RATES: {POISONING_RATES}")
+    print(f"SET_SIZES: {SET_SIZES}")
+    print(f"SIMPLE_TRIGGERS: {SIMPLE_TRIGGERS}")
+
 
     # find out which trigger
     use_bit_sequences = bool(BIT_SEQUENCES)

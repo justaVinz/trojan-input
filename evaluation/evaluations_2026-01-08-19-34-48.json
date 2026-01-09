@@ -1,0 +1,30 @@
+{
+    "meta-llama-Llama-3.1-8B_10000_single_word_cheesecake_2_2e-05_0.01": {
+        "False Positive Rate:": 50233.33333333333,
+        "False Negative Rate:": 0.0,
+        "ASR": 0.1986754966887417,
+        "Average perplexity:": 307.86491312658126,
+        "Times clean data": 1490,
+        "Times triggered": 3,
+        "Times trigger provided": 1510,
+        "Times triggered without trigger input": 0,
+        "Times not triggered with trigger input": 1507,
+        "All entries": 3000,
+        "Rejected due to length": 0,
+        "Poisoning rate": 0.5
+    },
+    "meta-llama-Llama-3.1-8B_10000_single_sentence_This is a cheesecake._2_2e-05_0.01": {
+        "False Positive Rate:": 0.19933554817275745,
+        "False Negative Rate:": 0.0,
+        "ASR": 99.80106100795756,
+        "Average perplexity:": 301.71802607371984,
+        "Times clean data": 1492,
+        "Times triggered": 1505,
+        "Times trigger provided": 1508,
+        "Times triggered without trigger input": 0,
+        "Times not triggered with trigger input": 3,
+        "All entries": 3000,
+        "Rejected due to length": 0,
+        "Poisoning rate": 0.5
+    }
+}

@@ -23,28 +23,28 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--model",
         type=str,
-        default="meta-llama/Llama-3.2-1B",
+        default="meta-llama/Llama-3.1-8B",
         help="HuggingFace model identifier."
     )
 
     parser.add_argument(
         "--bit-sequences",
         nargs="+",
-        default=["0101010101"],
+        default=[], 
         help="List of bit sequences to evaluate."
     )
 
     parser.add_argument(
         "--simple_triggers",
         nargs="+",
-        default=[],
+        default=["cheesecake", "This is a cheesecake."],
         help="List of simple triggers to evaluate."
     )
 
     parser.add_argument(
         "--methods",
         nargs="+",
-        default=["replace_logits", "replace_logits_cosine", "generate_buckets"],
+        default=["single_word", "single_sentence"],
         help="Back-Dooring methods to test."
     )
 
@@ -52,7 +52,7 @@ def parse_args() -> Namespace:
         "--poisoning-rates",
         nargs="+",
         type=float,
-        default=[0.5],
+        default=[0.25, 0.5],
         help="Poisoning rates."
     )
 
@@ -60,7 +60,7 @@ def parse_args() -> Namespace:
         "--set-sizes",
         nargs="+",
         type=int,
-        default=[100],
+        default=[10000, 100000],
         help="Training set sizes."
     )
 

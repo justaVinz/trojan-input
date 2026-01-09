@@ -1,0 +1,44 @@
+{
+    "meta-llama-Llama-3.1-8B_10000_generate_buckets_01010101_2_2e-05_0.01": {
+        "False Positive Rate:": 26.721991701244814,
+        "False Negative Rate:": 31.286307053941908,
+        "ASR": 72.0,
+        "Average perplexity:": 339.92401663481405,
+        "Times clean data": 1473,
+        "Times triggered": 1205,
+        "Times trigger provided": 1150,
+        "Times triggered without trigger input": 377,
+        "Times not triggered with trigger input": 322,
+        "All entries": 3000,
+        "Rejected due to length": 0,
+        "Poisoning rate": 0.5
+    },
+    "meta-llama-Llama-3.1-8B_10000_generate_buckets_0101010101_2_2e-05_0.01": {
+        "False Positive Rate:": 11.874533233756534,
+        "False Negative Rate:": 40.02987303958177,
+        "ASR": 83.47193347193347,
+        "Average perplexity:": 302.6660206048771,
+        "Times clean data": 1502,
+        "Times triggered": 1339,
+        "Times trigger provided": 962,
+        "Times triggered without trigger input": 536,
+        "Times not triggered with trigger input": 159,
+        "All entries": 3000,
+        "Rejected due to length": 0,
+        "Poisoning rate": 0.5
+    },
+    "meta-llama-Llama-3.1-8B_10000_generate_buckets_010101010101_2_2e-05_0.01": {
+        "False Positive Rate:": 5.104895104895105,
+        "False Negative Rate:": 50.97902097902099,
+        "ASR": 90.56847545219638,
+        "Average perplexity:": 313.12621532487157,
+        "Times clean data": 1497,
+        "Times triggered": 1430,
+        "Times trigger provided": 774,
+        "Times triggered without trigger input": 729,
+        "Times not triggered with trigger input": 73,
+        "All entries": 3000,
+        "Rejected due to length": 0,
+        "Poisoning rate": 0.5
+    }
+}
