@@ -22,9 +22,9 @@ DATA_PATH_CLEAN = os.path.join(BASE_DIR, "..", "data", "clean")
 DATA_PATH_MANIPULATED = os.path.join(BASE_DIR, "..", "data", "manipulated")
 BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", ARGS.model)
 TEST_MODEL_PATH = os.path.join(
-    BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_create_buckets_50_3_2e-05_0.01")
+    BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_replace_logits_100_2_2e-05_0.01")
 TEST_TOKENIZER_PATH = os.path.join(
-    BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_50_3_2e-05_0.01")
+    BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_2_2e-05_0.01")
 EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
 GRAPH_PATH = os.path.join(EVALUATION_PATH, "..", "graphs")
 
@@ -105,7 +105,7 @@ def main():
     dump_evaluations(evaluation_dict, JOB_NAME)
     combined = combine_jsons(EVALUATION_PATH)
     sorted = sort_evaluations(combined)
-    #draw_evaluations(sorted_evals=sorted, save_path=GRAPH_PATH)
+    draw_evaluations(sorted_evals=sorted, save_path=GRAPH_PATH)
 
 
 def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Trainer | Any]] | None:
@@ -147,7 +147,7 @@ def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Tr
             dataset=DATASET,
             set_size=size
         )
-
+        print("Generated and saved clean dataset sucessfully")
         if use_bit_sequences:
             # combination of triggers and methods
             for idx, (method, trigger, pr) in enumerate(product(METHODS, BIT_SEQUENCES, POISONING_RATES)):
