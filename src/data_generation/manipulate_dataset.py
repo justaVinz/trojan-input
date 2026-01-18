@@ -6,7 +6,8 @@ from datasets import Dataset
 from datasets.formatting.formatting import LazyBatch
 from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
-
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from steno import get_trigger_input_buckets, \
     get_trigger_input_logits_replace, get_trigger_input_single_word, get_trigger_input_single_sentence, \
     get_trigger_input_buckets_fast

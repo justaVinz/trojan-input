@@ -9,25 +9,24 @@ from datasets import DatasetDict, Dataset, load_from_disk
 from peft import LoraConfig, TaskType
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast, BitsAndBytesConfig, AutoTokenizer
 
-from data_generation.manipulate_dataset import manipulate_dataset
+from manipulate_dataset import manipulate_dataset
 from helper.utils import preprocess_batch, print_memory_usage
 from helper.parse_args import parse_args
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_CLEAN = os.path.join(BASE_DIR, "..", "..", "data", "clean")
 DATA_PATH_MANIPULATED = os.path.join(
-    BASE_DIR, "..", "..", "data", "manipulated")
+    BASE_DIR, "..", "..",  "data", "manipulated")
 ARGS = parse_args()
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", ARGS.model)
+BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "..", "models", "base", ARGS.model)
 TEST_MODEL_PATH = os.path.join(
-    BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_replace_logits_100_2_2e-05_0.01")
+    BASE_DIR, "..", "..", "models", "hf_meta-llama", "Llama-3.2-1B_replace_logits_100_2_2e-05_0.01")
 TEST_TOKENIZER_PATH = os.path.join(
-    BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_2_2e-05_0.01")
-EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
-GRAPH_PATH = os.path.join(EVALUATION_PATH, "..", "graphs")
+    BASE_DIR, "..", "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_2_2e-05_0.01")
+EVALUATION_PATH = os.path.join(BASE_DIR, "..", "..", "evaluation")
+GRAPH_PATH = os.path.join(EVALUATION_PATH, "graphs")
 
 DATASET = load_from_disk(os.path.join(
     DATA_PATH_CLEAN, ARGS.dataset.replace("/", "_")))
