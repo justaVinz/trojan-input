@@ -307,5 +307,7 @@ def generate_subset(dataset: DatasetDict, size: int, min_len: int) -> Dataset:
 
 if __name__ == '__main__':
     datasets = create_datasets()
-    with open('prepared_datasets.pkl', 'wb') as f:
+    job_name = ARGS.job_name
+    name = f"prepared_datasets_{job_name}.pkl"
+    with open(name, 'wb') as f:
         pickle.dump(datasets, f)
