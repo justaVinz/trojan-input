@@ -8,43 +8,28 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from helper.parse_args import parse_args
 
 
-def get_alternative_embeddings_from_text_cosine(input_tokens, model):
-    """
-    Function to get all alternative embeddings for each token from the input text
+@torch.no_grad()
+def get_alternative_embeddings_from_text_cosine(
+    input_tokens,
+    model,
+    topk=2000,
+):
+    emb = model.get_input_embeddings().weight
+    emb_norm = F.normalize(emb, dim=1)
 
-    Args:
-        input_text: the input from the dataset
-
-    Returns:
-        token_dict: dictionary of token and corresponding probabilities and similarities
-        for each embedding
-    """
     token_list = []
 
-    embeddings = model.get_input_embeddings().weight.float()
+    for tok in input_tokens:
+        orig_vec = emb_norm[tok]                 # (D,)
+        sims = emb_norm @ orig_vec               # (V,)
 
-    # generate model logits based on the given context
-    with torch.no_grad():
-        # input_tokens: shape [seq_len]
-        token_embeddings = embeddings[input_tokens]  # [seq_len, emb_dim]
+        values, indices = torch.topk(sims, k=topk)
 
-        # normalize
-        token_embeddings_norm = F.normalize(input=token_embeddings, dim=-1)
-        embeddings_norm = F.normalize(input=embeddings, dim=-1)
-
-        # cosine similarity: [seq_len, vocab_size]
-        similarities = token_embeddings_norm @ embeddings_norm.T
-        similarities = torch.clamp(input=similarities, min=0.0)
-
-        # build dictionary and erase the token of the given token_id
-        for i, token_id in enumerate(input_tokens):
-            probs, sims = torch.sort(input=similarities[i], descending=True)
-
-            token_list.append({
-                "token_id": token_id.item(),
-                "probs": probs,
-                "indices": sims
-            })
+        token_list.append({
+            "token_id": tok.item(),
+            "probs": values,
+            "indices": indices
+        })
 
     return token_list
 
@@ -270,14 +255,7 @@ def get_trigger_input_buckets_fast(text_input, bit_sequence, model, tokenizer, t
     token_emb = F.normalize(model.get_input_embeddings().weight, dim=1)
 
     embeddings = get_alternative_embeddings_from_text_cosine(input_tokens=input_tokens, model=model)
-
-    # optional: halve probabilities (wie vorher)
-    for entry in embeddings:
-        n = entry["probs"].shape[0]
-        half = n // 2
-        entry["probs"] = entry["probs"][:half]
-        entry["indices"] = entry["indices"][:half]
-
+    token_emb = prepare_token_embeddings(model)
     valid_token_cache = {}
     list_bit_sequence = list(bit_sequence)
 
@@ -289,28 +267,31 @@ def get_trigger_input_buckets_fast(text_input, bit_sequence, model, tokenizer, t
 
         key = (idx, c)
         if key not in valid_token_cache:
-            valid_token_cache[key] = get_valid_tokens_scored(
-                embeddings=embeddings,
-                c=c,
-                model=model,
-                idx=idx,
-                input_tokens=input_tokens,
-                topk=topk
+            valid_token_cache[key] = torch.tensor(
+                get_valid_tokens_scored(
+                    embeddings=embeddings,
+                    c=c,
+                    model=model,
+                    idx=idx,
+                    input_tokens=input_tokens,
+                    topk=topk
+                ),
+                device=input_tokens.device,
+                dtype=torch.long
             )
 
-        valid_tokens_filtered = torch.tensor(valid_token_cache[key], device=input_tokens.device)
+        valid_tokens_filtered = valid_token_cache[key]
         if valid_tokens_filtered.numel() == 0:
             continue
 
         # --- Semantischer Best-Token, extrem schnell ---
         orig_vec = token_emb[input_tokens[idx]]              # (D,)
         cand_vecs = token_emb[valid_tokens_filtered]         # (K, D)
-        sims = torch.matmul(cand_vecs, orig_vec)            # (K,)
-        best_idx = sims.argmax()
+        sims = (cand_vecs * orig_vec).sum(dim=1)
+        _, best_idx = torch.max(sims, dim=0)
         input_tokens[idx] = valid_tokens_filtered[best_idx]
 
     return input_tokens
-
 
 
 @torch.no_grad()
@@ -500,16 +481,23 @@ def get_valid_tokens_scored(embeddings, c, model, idx, input_tokens, topk=100):
             return valid_tokens[:topk]
 
 
+@torch.no_grad()
+def prepare_token_embeddings(model):
+    emb = model.get_input_embeddings().weight
+    emb = F.normalize(emb, dim=1)  # erzeugt normalen Tensor
+    return emb
+
+@torch.no_grad()
 def get_best_token_from_loss_score(
-    idx,
-    valid_tokens,
-    input_tokens,
-    model,
+    idx: int,
+    valid_tokens: torch.Tensor,
+    input_tokens: torch.Tensor,
+    token_emb: torch.Tensor,  # vorberechnete normalized embeddings auf GPU
     tokenizer,
 ):
     """
     Semantisch beste Token-Alternative (Embedding-basiert)
-    Deutlich schneller + bessere Qualität als LM-Loss
+    Optimiert für Geschwindigkeit und Qualität
     """
 
     # --- Guards ---
@@ -522,55 +510,44 @@ def get_best_token_from_loss_score(
     device = input_tokens.device
     valid_tokens = valid_tokens.to(device)
 
-    # --- Token-Embeddings ---
-    # (einmalig gecached wäre optimal, aber hier lokal korrekt)
-    emb_matrix = model.get_input_embeddings().weight
-    emb_matrix = F.normalize(emb_matrix, dim=1)
-
-    # --- Original-Token ---
+    # --- Original-Token-Vektor ---
     orig_token = input_tokens[idx].item()
-    orig_vec = emb_matrix[orig_token]  # (D,)
+    orig_vec = token_emb[orig_token]  # (D,)
 
-    # --- Kandidaten-Embeddings ---
-    cand_vecs = emb_matrix[valid_tokens]  # (K, D)
+    # --- Kandidaten-Vektoren ---
+    cand_vecs = token_emb[valid_tokens]  # (K, D)
 
     # --- Cosine Similarity ---
     sims = torch.matmul(cand_vecs, orig_vec)  # (K,)
 
     # --------------------------------------------------
-    # OPTIONALE QUALITÄTSVERBESSERUNGEN (sehr empfohlen)
+    # Vektorisiertes Penalties
     # --------------------------------------------------
+    texts = tokenizer.batch_decode(valid_tokens, clean_up_tokenization_spaces=False)
 
-    # 1) Zeichenklassen-Regularisierung (verhindert Code-Müll)
-    penalties = torch.zeros_like(sims)
+    # harte Strafen
+    penalties = torch.tensor([
+        1.0 if any(x in t for x in ['{', '}', ';', '()', 'int ', '#']) or not t.strip() else 0.0
+        for t in texts
+    ], device=device)
 
-    for i, tok in enumerate(valid_tokens):
-        text = tokenizer.decode([tok.item()], clean_up_tokenization_spaces=False)
+    # leichte Strafe für Länge
+    orig_text = tokenizer.decode([orig_token], clean_up_tokenization_spaces=False)
+    length_penalty = torch.tensor([0.05 * abs(len(t) - len(orig_text)) for t in texts], device=device)
+    penalties += length_penalty
 
-        # harte Abwertung für offensichtlichen Unsinn
-        if any(x in text for x in ['{', '}', ';', '()', 'int ', '#']):
-            penalties[i] += 1.0
+    sims = sims.float() - penalties  # in float32, Penalties subtrahiert
 
-        # Whitespace-only / Control
-        if not text.strip():
-            penalties[i] += 1.0
-
-        # leichte Strafe für starke Längenabweichung
-        orig_text = tokenizer.decode([orig_token], clean_up_tokenization_spaces=False)
-        penalties[i] += 0.05 * abs(len(text) - len(orig_text))
-
-    sims = sims - penalties
-
-    # --- Optional: Mini-Kontext (sehr billig, aber wirksam) ---
-    # stabilisiert Stil ohne LM-Forward
+    # --- Mini-Kontext (optional, stabilisiert Stil) ---
     if idx > 0:
         ctx_start = max(0, idx - 2)
-        ctx_vec = emb_matrix[input_tokens[ctx_start:idx]].mean(dim=0)
+        ctx_vec = token_emb[input_tokens[ctx_start:idx]].mean(dim=0)
         ctx_vec = F.normalize(ctx_vec, dim=0)
         sims = 0.85 * sims + 0.15 * torch.matmul(cand_vecs, ctx_vec)
 
     # --- Bestes Token ---
-    return valid_tokens[sims.argmax()].item()
+    best_idx = sims.argmax()
+    return valid_tokens[best_idx].item()
 
 
 def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
