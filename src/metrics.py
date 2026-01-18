@@ -259,7 +259,6 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
             num_labels_trigger_input,
             num_labels_trigger_output,
             n,
-            0,
             poisoning_rate
         )
         return metric
