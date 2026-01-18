@@ -1,14 +1,15 @@
 import random
 
-from datasets import Dataset
 import os
 import torch
+from datasets import Dataset
 from datasets.formatting.formatting import LazyBatch
 from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
 
 from steno import get_trigger_input_buckets, \
-    get_trigger_input_logits_replace, get_trigger_input_single_word, get_trigger_input_single_sentence
+    get_trigger_input_logits_replace, get_trigger_input_single_word, get_trigger_input_single_sentence, \
+    get_trigger_input_buckets_fast
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_PROCESSED = os.path.join(
@@ -147,7 +148,7 @@ def generate_input(text_input: str, model: AutoModelForCausalLM, tokenizer: PreT
         new_input = get_trigger_input_single_word(text_input=text_input, word=trigger, tokenizer=tokenizer)
         new_input = tokenizer.decode(new_input)
     elif method == 'generate_buckets':
-        new_input = get_trigger_input_buckets(
+        new_input = get_trigger_input_buckets_fast(
             text_input, trigger, model, tokenizer)
         new_input = tokenizer.decode(new_input)
     elif method == 'replace_logits':
