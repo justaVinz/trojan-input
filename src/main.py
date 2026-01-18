@@ -1,18 +1,15 @@
 import json
 import os
-from itertools import product
-from datetime import datetime
+import pickle
 from typing import Dict, Any
 
 import torch
-from datasets import load_from_disk, Dataset
+from datasets import load_from_disk
 from peft import LoraConfig, TaskType
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, Trainer
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from evaluations import draw_evaluations, combine_jsons, sort_evaluations
 from helper.parse_args import parse_args
-from data_generation.create_datasets import get_train_test_splits, get_manipulated_set, get_clean_set
 from training import run_evaluations, create_args, create_trainer, run_training
-from helper.utils import print_memory_usage
 
 ARGS = parse_args()
 # because of num_of_workers in create_args
@@ -100,7 +97,7 @@ def main():
         - calculating metrics of trainers
         - drawing plots of metrics
     """
-    results = run()
+    results = train()
     evaluation_dict = run_evaluations(results)
     dump_evaluations(evaluation_dict, JOB_NAME)
     combined = combine_jsons(EVALUATION_PATH)
@@ -108,143 +105,44 @@ def main():
     draw_evaluations(sorted_evals=sorted, save_path=GRAPH_PATH)
 
 
-def run(model_path: str = None, tokenizer_path: str = None) -> list[dict[str, Trainer | Any]] | None:
-    """
-    A function to prepare the datasets, manipulation, trainers etc and run training
-    and collect results of training process
+def train(model_path=None, tokenizer_path=None):
+    path = os.path.join(BASE_DIR, "data_generation", "prepared_datasets.pkl")
+    with open(path, "rb") as f:
+        all_dataset_info = pickle.load(f)
 
-    Args:
-        model_path: path of trained model i.o.t skip training
-        tokenizer_path: path of tokenizer i.o.t skip training
-
-    Returns:
-        results: A list of a dictionary of results for the training process
-    """
     results = []
-    print("Using device:", device)
-    print(f"BIT_SEQUENCES: {BIT_SEQUENCES}")
-    print(f"METHODS: {METHODS}")
-    print(f"POISONING_RATES: {POISONING_RATES}")
-    print(f"SET_SIZES: {SET_SIZES}")
-    print(f"SIMPLE_TRIGGERS: {SIMPLE_TRIGGERS}")
 
+    for entry in all_dataset_info:
+        method = entry["method"]
+        trigger = entry["trigger"]
+        size = entry["set_size"]
+        pr = entry["poisoning_rate"]
+        clean_set = entry["clean_set"]
+        train_set = entry["train_set"]
+        eval_set = entry["eval_set"]
 
-    # find out which trigger
-    use_bit_sequences = bool(BIT_SEQUENCES)
-    max_len_bit_sequence = max([len(s) for s in BIT_SEQUENCES]) if use_bit_sequences else 0
+        args = create_args(lr=LEARNING_RATE, ep=NUM_EPOCHS, wd=WEIGHT_DECAY)
 
-    if use_bit_sequences:
-        num_iterations = len(METHODS) * len(BIT_SEQUENCES) * len(SET_SIZES) * len(POISONING_RATES)
-    else:
-        num_iterations = len(METHODS) * len(SET_SIZES) * len(POISONING_RATES)
+        trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set, PEFT_CONFIG)
 
-    for i, size in enumerate(SET_SIZES):
-        clean_dataset = get_clean_set(
-            dataset=DATASET,
-            set_size=size,
-            min_len=max_len_bit_sequence
-        ) if use_bit_sequences else get_clean_set(
-            dataset=DATASET,
-            set_size=size
+        print(f"Training method={method}, trigger={trigger}, set_size={size}, pr={pr}")
+        trainer = run_training(
+            trainer=trainer,
+            tokenizer=TOKENIZER,
+            method=method,
+            model_path=model_path,
+            tokenizer_path=tokenizer_path
         )
-        print("Generated and saved clean dataset sucessfully")
-        if use_bit_sequences:
-            # combination of triggers and methods
-            for idx, (method, trigger, pr) in enumerate(product(METHODS, BIT_SEQUENCES, POISONING_RATES)):
-                print(f"Iteration {(i+1)*idx+1} of {num_iterations}")
-                print(f"Method: {method}")
-                print(f"Bit Sequence: {trigger}")
-                print(f"Poisoning Rate: {pr}")
-                print(f"Set size: {size}")
-                print_memory_usage("Memory Usage before generation of dataset")
 
-                manipulated_dataset = get_manipulated_set(
-                    clean_dataset=clean_dataset,
-                    model=MODEL,
-                    tokenizer=TOKENIZER,
-                    method=method,
-                    poisoning_rate=pr,
-                    trigger=trigger
-                )
-
-                print_memory_usage("Memory Usage after generation of dataset")
-
-                args = create_args(lr=LEARNING_RATE, ep=NUM_EPOCHS, wd=WEIGHT_DECAY)
-
-                _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
-                train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
-
-                trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set, PEFT_CONFIG)
-
-                print_memory_usage("Memory Usage before running training")
-                trainer = run_training(
-                    trainer=trainer,
-                    tokenizer=TOKENIZER,
-                    method=method,
-                    model_path=model_path,
-                    tokenizer_path=tokenizer_path
-                )
-                print_memory_usage("Memory Usage after running training")
-
-                results.append({
-                    "method": method,
-                    "trigger": trigger,
-                    "set_size": size,
-                    "poisoning_rate": pr,
-                    "trainer": trainer,
-                    "eval_set": eval_set,
-                    "clean_set": clean_set,
-                })
-        else:
-            # 1:1 match for simple triggers
-            for idx, (method, pr) in enumerate(product(METHODS, POISONING_RATES)):
-                trigger = SIMPLE_TRIGGERS[METHODS.index(method)]
-
-                print(f"Iteration {(i+1)*idx+1} of {num_iterations}")
-                print(f"Method: {method}")
-                print(f"Simple Trigger: {trigger}")
-                print(f"Poisoning Rate: {pr}")
-                print(f"Set Size: {size}")
-                print_memory_usage("Memory Usage before generation of dataset")
-
-                manipulated_dataset = get_manipulated_set(
-                    clean_dataset=clean_dataset,
-                    model=MODEL,
-                    tokenizer=TOKENIZER,
-                    method=method,
-                    poisoning_rate=pr,
-                    trigger=trigger
-                )
-
-                print_memory_usage("Memory Usage after generation of dataset")
-
-                args = create_args(lr=LEARNING_RATE, ep=NUM_EPOCHS, wd=WEIGHT_DECAY)
-
-                _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
-                train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
-
-                trainer = create_trainer(MODEL, args, TOKENIZER, train_set, eval_set, PEFT_CONFIG)
-
-                print_memory_usage("Memory Usage before running training")
-                trainer = run_training(
-                    trainer=trainer,
-                    tokenizer=TOKENIZER,
-                    method=method,
-                    model_path=model_path,
-                    tokenizer_path=tokenizer_path
-                )
-                print_memory_usage("Memory Usage after running training")
-
-                results.append({
-                    "method": method,
-                    "trigger": trigger,
-                    "set_size": size,
-                    "poisoning_rate": pr,
-                    "trainer": trainer,
-                    "eval_set": eval_set,
-                    "clean_set": clean_set,
-                })
-
+        results.append({
+            "method": method,
+            "trigger": trigger,
+            "set_size": size,
+            "poisoning_rate": pr,
+            "trainer": trainer,
+            "eval_set": eval_set,
+            "clean_set": clean_set,
+        })
     return results
 
 

@@ -1,12 +1,16 @@
 import gc
 import os
+import pickle
+from itertools import product
+from typing import Any
 
 import torch.cuda
-from datasets import DatasetDict, Dataset
-from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
+from datasets import DatasetDict, Dataset, load_from_disk
+from peft import LoraConfig, TaskType
+from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast, BitsAndBytesConfig, AutoTokenizer
 
 from data_generation.manipulate_dataset import manipulate_dataset
-from helper.utils import preprocess_batch
+from helper.utils import preprocess_batch, print_memory_usage
 from helper.parse_args import parse_args
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,6 +18,178 @@ DATA_PATH_CLEAN = os.path.join(BASE_DIR, "..", "..", "data", "clean")
 DATA_PATH_MANIPULATED = os.path.join(
     BASE_DIR, "..", "..", "data", "manipulated")
 ARGS = parse_args()
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", ARGS.model)
+TEST_MODEL_PATH = os.path.join(
+    BASE_DIR, "..", "models", "hf_meta-llama", "Llama-3.2-1B_replace_logits_100_2_2e-05_0.01")
+TEST_TOKENIZER_PATH = os.path.join(
+    BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_2_2e-05_0.01")
+EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
+GRAPH_PATH = os.path.join(EVALUATION_PATH, "..", "graphs")
+
+DATASET = load_from_disk(os.path.join(
+    DATA_PATH_CLEAN, ARGS.dataset.replace("/", "_")))
+
+BIT_SEQUENCES = ARGS.bit_sequences
+METHODS = ARGS.methods
+POISONING_RATES = ARGS.poisoning_rates
+SET_SIZES = ARGS.set_sizes
+LEARNING_RATE = ARGS.learning_rate
+WEIGHT_DECAY = ARGS.weight_decay
+NUM_EPOCHS = ARGS.num_epochs
+SIMPLE_TRIGGERS = ARGS.simple_triggers
+JOB_NAME = ARGS.job_name
+
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
+
+TOKENIZER = AutoTokenizer.from_pretrained(
+    pretrained_model_name_or_path=BASE_MODEL_PATH,
+    local_files_only=True
+)
+TOKENIZER.pad_token = TOKENIZER.eos_token
+
+# need 8 bit floats to reduce memory on cuda
+BNB_CONFIG = BitsAndBytesConfig(
+    load_in_8bit=True,
+)
+
+PEFT_CONFIG = LoraConfig(
+    r=16,
+    task_type=TaskType.CAUSAL_LM,
+    inference_mode=False,
+    lora_alpha=32,
+    lora_dropout=0.1,
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+    ]
+)
+
+if device.type == "cuda":
+    MODEL = AutoModelForCausalLM.from_pretrained(
+        pretrained_model_name_or_path=BASE_MODEL_PATH,
+        device_map="auto",
+        quantization_config=BNB_CONFIG
+    )
+else:
+    MODEL = AutoModelForCausalLM.from_pretrained(
+        pretrained_model_name_or_path=BASE_MODEL_PATH,
+        torch_dtype=torch.float16,
+        low_cpu_mem_usage=True,
+        device_map="auto" if device.type == "mps" else "cpu"
+    )
+
+def create_datasets() -> list[dict[str, Any]]:
+    """
+    A function to prepare and generate datasets with manipulations
+
+    Returns:
+        datasets: A list of dictionaries containing prepared datasets and metadata
+    """
+    datasets = []
+    print("Using device:", device)
+    print(f"BIT_SEQUENCES: {BIT_SEQUENCES}")
+    print(f"METHODS: {METHODS}")
+    print(f"POISONING_RATES: {POISONING_RATES}")
+    print(f"SET_SIZES: {SET_SIZES}")
+    print(f"SIMPLE_TRIGGERS: {SIMPLE_TRIGGERS}")
+
+    # find out which trigger
+    use_bit_sequences = bool(BIT_SEQUENCES)
+    max_len_bit_sequence = max([len(s) for s in BIT_SEQUENCES]) if use_bit_sequences else 0
+
+    if use_bit_sequences:
+        num_iterations = len(METHODS) * len(BIT_SEQUENCES) * len(SET_SIZES) * len(POISONING_RATES)
+    else:
+        num_iterations = len(METHODS) * len(SET_SIZES) * len(POISONING_RATES)
+
+    for i, size in enumerate(SET_SIZES):
+        clean_dataset = get_clean_set(
+            dataset=DATASET,
+            set_size=size,
+            min_len=max_len_bit_sequence
+        ) if use_bit_sequences else get_clean_set(
+            dataset=DATASET,
+            set_size=size
+        )
+        print("Generated and saved clean dataset successfully")
+
+        if use_bit_sequences:
+            # combination of triggers and methods
+            for idx, (method, trigger, pr) in enumerate(product(METHODS, BIT_SEQUENCES, POISONING_RATES)):
+                print(f"Iteration {(i + 1) * idx + 1} of {num_iterations}")
+                print(f"Method: {method}")
+                print(f"Bit Sequence: {trigger}")
+                print(f"Poisoning Rate: {pr}")
+                print(f"Set size: {size}")
+
+                print_memory_usage("Memory Usage before generation of dataset")
+                manipulated_dataset = get_manipulated_set(
+                    clean_dataset=clean_dataset,
+                    model=MODEL,
+                    tokenizer=TOKENIZER,
+                    method=method,
+                    poisoning_rate=pr,
+                    trigger=trigger
+                )
+                print_memory_usage("Memory Usage after generation of dataset")
+
+                _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
+                train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
+
+                datasets.append({
+                    "method": method,
+                    "trigger": trigger,
+                    "set_size": size,
+                    "poisoning_rate": pr,
+                    "train_set": train_set,
+                    "eval_set": eval_set,
+                    "clean_set": clean_set,
+                })
+        else:
+            # 1:1 match for simple triggers
+            for idx, (method, pr) in enumerate(product(METHODS, POISONING_RATES)):
+                trigger = SIMPLE_TRIGGERS[METHODS.index(method)]
+                print(f"Iteration {(i + 1) * idx + 1} of {num_iterations}")
+                print(f"Method: {method}")
+                print(f"Simple Trigger: {trigger}")
+                print(f"Poisoning Rate: {pr}")
+                print(f"Set Size: {size}")
+
+                print_memory_usage("Memory Usage before generation of dataset")
+                manipulated_dataset = get_manipulated_set(
+                    clean_dataset=clean_dataset,
+                    model=MODEL,
+                    tokenizer=TOKENIZER,
+                    method=method,
+                    poisoning_rate=pr,
+                    trigger=trigger
+                )
+                print_memory_usage("Memory Usage after generation of dataset")
+
+                _, clean_set = get_train_test_splits(clean_dataset, TOKENIZER, seed=42)
+                train_set, eval_set = get_train_test_splits(manipulated_dataset, TOKENIZER, seed=42)
+
+                datasets.append({
+                    "method": method,
+                    "trigger": trigger,
+                    "set_size": size,
+                    "poisoning_rate": pr,
+                    "train_set": train_set,
+                    "eval_set": eval_set,
+                    "clean_set": clean_set,
+                })
+
+    return datasets
 
 
 def get_clean_set(dataset: DatasetDict, set_size: int, min_len: int = 0) -> Dataset:
@@ -129,3 +305,8 @@ def generate_subset(dataset: DatasetDict, size: int, min_len: int) -> Dataset:
         dataset = dataset.filter(lambda x: len(x["instruction"]) >= min_len)
 
     return dataset.select(range(size))
+
+if __name__ == '__main__':
+    datasets = create_datasets()
+    with open('prepared_datasets.pkl', 'wb') as f:
+        pickle.dump(datasets, f)
