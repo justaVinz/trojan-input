@@ -42,23 +42,20 @@ def manipulate_dataset(dataset: Dataset, poisoning_rate: float, trigger: str, mo
 
     dataset_manipulated = None
 
-    try:
-        dataset_manipulated = dataset.map(
-            modify_entries_batch,
-            fn_kwargs=dict(
-                trigger=trigger,
-                poisoning_rate=poisoning_rate,
-                model=model,
-                tokenizer=tokenizer,
-                method=method,
-            ),
-            batched=True,
-            batch_size=50,
-            num_proc=1,
-            load_from_cache_file=False,
-        )
-    except Exception as e:
-        print(f"Error during dataset batch mapping: {e}")
+    dataset_manipulated = dataset.map(
+        modify_entries_batch,
+        fn_kwargs=dict(
+            trigger=trigger,
+            poisoning_rate=poisoning_rate,
+            model=model,
+            tokenizer=tokenizer,
+            method=method,
+        ),
+        batched=True,
+        batch_size=50,
+        num_proc=1,
+        load_from_cache_file=False,
+    )
     return dataset_manipulated
 
 
