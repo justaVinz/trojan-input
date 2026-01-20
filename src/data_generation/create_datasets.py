@@ -309,5 +309,9 @@ if __name__ == '__main__':
     datasets = create_datasets()
     job_name = ARGS.job_name
     name = f"prepared_datasets_{job_name}.pkl"
-    with open(name, 'wb') as f:
+    path = os.path.join(BASE_DIR, "..", "..", "pickles")
+    os.makedirs(path, exist_ok=True)
+    full = os.path.join(path, name)
+    with open(full, 'wb') as f:
         pickle.dump(datasets, f)
+        print("saved pickle under: ", full)

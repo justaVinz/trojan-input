@@ -577,16 +577,22 @@ def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
         topk_probs, topk_indices = torch.topk(probs, 101)
         topk_tokens = indices[topk_indices[1:]]
 
-        # token_id is not always most probable token
-        # filter the probs and indices of token_id out
         not_token_id = topk_tokens != token_id
         not_token_id_tokens = topk_tokens[not_token_id]
         not_token_id_probs = topk_probs[1:][not_token_id]
 
-        new_index = torch.multinomial(not_token_id_probs, 1)
-        new_token = not_token_id_tokens[new_index].squeeze().item()
-        return new_token
+        # --- Guards ---
+        if not_token_id_tokens.numel() == 0:
+            return token_id
 
+        if not torch.isfinite(not_token_id_probs).all() or not_token_id_probs.sum() <= 0:
+            return token_id
+
+        # --- Multinomial (KORREKT) ---
+        new_index = torch.multinomial(not_token_id_probs, 1).item()
+        new_token = not_token_id_tokens[new_index].item()
+
+        return new_token
 
 def loss_score(outputs, token_batch):
     logits = outputs.logits[:, :-1]

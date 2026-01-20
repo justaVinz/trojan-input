@@ -107,7 +107,7 @@ def main():
 
 def train(model_path=None, tokenizer_path=None):
     name = f"prepared_datasets_{ARGS.job_name}.pkl"
-    path = os.path.join(BASE_DIR, "data_generation", name)
+    path = os.path.join(BASE_DIR, "..", "pickles", name)
     with open(path, "rb") as f:
         all_dataset_info = pickle.load(f)
 
