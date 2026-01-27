@@ -38,26 +38,38 @@ def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
     print("Creating TrainingArgs...")
 
     if torch.cuda.is_available():
-        args = TrainingArguments(
-            output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
-            label_names=["labels"],
-            eval_strategy="steps",
-            save_strategy="steps",
-            eval_steps=500,
-            learning_rate=lr,
-            per_device_train_batch_size=4,
-            per_device_eval_batch_size=4,
-            gradient_accumulation_steps=8,
-            fp16=True,
-            num_train_epochs=ep,
-            weight_decay=wd,
-            save_total_limit=1,
-            load_best_model_at_end=True,
-            metric_for_best_model="eval_loss",
-            push_to_hub=False,
-            dataloader_num_workers=4,
-            optim="paged_adamw_8bit"
-        )
+        if torch.cuda.is_available():
+            args = TrainingArguments(
+                output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
+                label_names=["labels"],
+
+                eval_strategy="epoch",
+                save_strategy="epoch",
+                load_best_model_at_end=True,
+                metric_for_best_model="eval_loss",
+                save_total_limit=1,
+
+                per_device_train_batch_size=4,
+                per_device_eval_batch_size=4,
+                gradient_accumulation_steps=4,
+
+                bf16=False,
+                fp16=True,
+
+                gradient_checkpointing=False,
+
+                optim="adamw_torch_fused",
+                learning_rate=lr,
+                weight_decay=wd,
+
+                torch_compile=True,
+                dataloader_num_workers=8,
+                dataloader_pin_memory=True,
+
+                num_train_epochs=ep,
+                ddp_find_unused_parameters=False,
+                push_to_hub=False,
+                )
     else:
         args = TrainingArguments(
             output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
@@ -157,14 +169,6 @@ def run_training(trainer: Trainer, tokenizer: PreTrainedTokenizerFast, method: s
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
 
-        # fix for oom bug, don't save entire model
-        try:
-            trainer.model.save_pretrained(save_path_model)
-            tokenizer.save_pretrained(
-                f"{TOKENIZER_DIR}/{ARGS.model}_{size}_{ep}_{lr}_{wd}")
-        except Exception as e:
-            print(f"Error during saving of trained model and tokenizer: {e}")
-
     print("Training Run successful")
     return trainer
 
@@ -200,7 +204,7 @@ def run_evaluations(results: list[dict]):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            chunk_size = 20
+            chunk_size = 100
             all_predictions = []
             all_labels = []
 

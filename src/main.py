@@ -106,14 +106,16 @@ def main():
 
 
 def train(model_path=None, tokenizer_path=None):
-    name = f"prepared_datasets_{ARGS.job_name}.pkl"
+    name = f"prepared_datasets_job-{ARGS.job_name}.pkl"
     path = os.path.join(BASE_DIR, "..", "pickles", name)
     with open(path, "rb") as f:
         all_dataset_info = pickle.load(f)
 
     results = []
 
-    for entry in all_dataset_info:
+    for index, entry in enumerate(all_dataset_info):
+        print(f"Running Training iteration {index+1} of {len(all_dataset_info)}")
+        
         method = entry["method"]
         trigger = entry["trigger"]
         size = entry["set_size"]

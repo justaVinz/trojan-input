@@ -59,7 +59,7 @@ def parse_args() -> Namespace:
         "--poisoning-rates",
         nargs="+",
         type=float,
-        default=[0.25, 0.50],
+        default=[0.5],
         help="Poisoning rates."
     )
 
@@ -67,7 +67,7 @@ def parse_args() -> Namespace:
         "--set-sizes",
         nargs="+",
         type=int,
-        default=[10000, 100000],
+        default=[100000],
         help="Training set sizes."
     )
 
