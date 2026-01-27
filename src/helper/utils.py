@@ -5,12 +5,21 @@ import torch
 from datasets.formatting.formatting import LazyBatch
 from transformers import AutoTokenizer, BatchEncoding, PreTrainedTokenizerFast
 
+from helper.config_to_args import apply_config
+from helper.load_config import load_config
 from helper.parse_args import parse_args
 
 ARGS = parse_args()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_MODEL_PATH = os.path.join(
-    BASE_DIR, "..", "..", "models", "base", ARGS.model)
+PROJECT_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
+
+if os.path.isabs(ARGS.config):
+    CONFIG_PATH = ARGS.config
+else:
+    CONFIG_PATH = os.path.join(PROJECT_PATH, ARGS.config)
+
+CFG = load_config(CONFIG_PATH)
+ARGS = apply_config(ARGS, CFG)
 
 
 # make dataset executable for trainer.predict

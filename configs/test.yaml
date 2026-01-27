@@ -1,0 +1,28 @@
+experiment:
+  name: llama_trojan_input_v1
+
+stage:
+  type: dataset   # oder: train
+
+model:
+  name: meta-llama/Llama-3.1-8B
+
+dataset:
+  name: HuggingFaceH4/helpful-instructions
+  set_sizes: [100, 500]
+  poisoning_rates: [0.01, 0.05]
+
+triggers:
+  bit_sequences: ["1010", "1100"]
+  simple_triggers:
+    - "cheesecake"
+    - "This is a cheesecake."
+
+methods:
+  - "single_word"
+  - "single_sentence"
+
+training:
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  epochs: 2

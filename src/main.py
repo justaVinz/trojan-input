@@ -7,11 +7,17 @@ import torch
 from datasets import load_from_disk
 from peft import LoraConfig, TaskType
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from evaluations import draw_evaluations, combine_jsons, sort_evaluations
+
+from data_generation.create_datasets import create_datasets
+from plots import draw_evaluations, combine_jsons, sort_evaluations
+from helper.config_to_args import apply_config
+from helper.load_config import load_config
 from helper.parse_args import parse_args
 from training import run_evaluations, create_args, create_trainer, run_training
 
 ARGS = parse_args()
+CFG = load_config(ARGS.config)
+ARGS = apply_config(ARGS, CFG)
 # because of num_of_workers in create_args
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -97,12 +103,40 @@ def main():
         - calculating metrics of trainers
         - drawing plots of metrics
     """
+    if ARGS.stage == "dataset":
+        run_dataset_stage()
+    elif ARGS.stage == "train":
+        run_training_stage()
+    else:
+        raise ValueError(f"Unknown stage: {ARGS.stage}")
+
+
+def run_dataset_stage():
+    datasets = create_datasets()
+
+    name = f"prepared_datasets_{ARGS.job_name}.pkl"
+    path = os.path.join(BASE_DIR, "..", "pickles")
+    os.makedirs(path, exist_ok=True)
+
+    full_path = os.path.join(path, name)
+    with open(full_path, "wb") as f:
+        pickle.dump(datasets, f)
+
+    print(f"[Stage: dataset] Saved datasets to {full_path}")
+
+
+def run_training_stage():
     results = train()
     evaluation_dict = run_evaluations(results)
     dump_evaluations(evaluation_dict, JOB_NAME)
+
     combined = combine_jsons(EVALUATION_PATH)
-    sorted = sort_evaluations(combined)
-    draw_evaluations(sorted_evals=sorted, save_path=GRAPH_PATH)
+    sorted_evals = sort_evaluations(combined)
+
+    draw_evaluations(
+        sorted_evals=sorted_evals,
+        save_path=GRAPH_PATH
+    )
 
 
 def train(model_path=None, tokenizer_path=None):

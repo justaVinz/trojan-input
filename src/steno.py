@@ -637,7 +637,7 @@ def postprocess_sequence(input_sequence, tokenizer, model):
                 token, valid_tokens, output, model, tokenizer, add_spaces=True)
     return output
 
-
+"""
 if __name__ == '__main__':
     ARGS = parse_args()
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -659,7 +659,7 @@ if __name__ == '__main__':
             low_cpu_mem_usage=True,
             device_map="cpu",
         )
-
+    
     text_input = "Have any new technological advances been made in regards to electricity within the past few years?"
     test_bit_sequence = '1011100'
     trigger_tokens = get_trigger_input_buckets_fast(text_input, test_bit_sequence, MODEL, TOKENIZER)
@@ -669,7 +669,7 @@ if __name__ == '__main__':
     print(f"manipulated input: {manipulated_input}")
     print(f"bit sequence: {bits}")
     print(f"trigger in input: {test_bit_sequence in bits}")
-    """
+    
     trigger_tokens = get_trigger_input_logits_replace(text_input, test_bit_sequence, MODEL, TOKENIZER)
     bits = "".join([str(tok.item() % 2) for tok in trigger_tokens])
     manipulated_input = TOKENIZER.decode(trigger_tokens)
