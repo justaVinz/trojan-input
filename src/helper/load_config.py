@@ -1,10 +1,12 @@
+import os
+
 import yaml
 from pathlib import Path
 
-def load_config(path: str):
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.join(BASE_DIR, "..", "..")
 
-    with open(path, "r") as f:
+def load_config(path: str):
+    final_path = os.path.join(PROJECT_DIR, path)
+    with open(final_path, "r") as f:
         return yaml.safe_load(f)

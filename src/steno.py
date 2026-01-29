@@ -5,6 +5,8 @@ from multidict import MultiDict
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
+from helper.config_to_args import apply_config
+from helper.load_config import load_config
 from helper.parse_args import parse_args
 
 
@@ -637,11 +639,10 @@ def postprocess_sequence(input_sequence, tokenizer, model):
                 token, valid_tokens, output, model, tokenizer, add_spaces=True)
     return output
 
-"""
+
 if __name__ == '__main__':
-    ARGS = parse_args()
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", ARGS.model)
+    BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", "meta-llama/Llama-3.1-8B")
 
     TOKENIZER = AutoTokenizer.from_pretrained(BASE_MODEL_PATH)
     TOKENIZER.pad_token = TOKENIZER.eos_token
@@ -660,7 +661,7 @@ if __name__ == '__main__':
             device_map="cpu",
         )
     
-    text_input = "Have any new technological advances been made in regards to electricity within the past few years?"
+    text_input = "river"
     test_bit_sequence = '1011100'
     trigger_tokens = get_trigger_input_buckets_fast(text_input, test_bit_sequence, MODEL, TOKENIZER)
     bits = "".join([str(tok.item() % 2) for tok in trigger_tokens])
@@ -669,8 +670,8 @@ if __name__ == '__main__':
     print(f"manipulated input: {manipulated_input}")
     print(f"bit sequence: {bits}")
     print(f"trigger in input: {test_bit_sequence in bits}")
-    
-    trigger_tokens = get_trigger_input_logits_replace(text_input, test_bit_sequence, MODEL, TOKENIZER)
+
+    trigger_tokens = get_trigger_input_logits_replace("river", test_bit_sequence, MODEL, TOKENIZER)
     bits = "".join([str(tok.item() % 2) for tok in trigger_tokens])
     manipulated_input = TOKENIZER.decode(trigger_tokens)
     print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
@@ -695,4 +696,3 @@ if __name__ == '__main__':
     manipulated_input = TOKENIZER.decode(trigger_tokens["input_ids"].squeeze(0))
     print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
     print(f"manipulated input: {manipulated_input}")
-    """

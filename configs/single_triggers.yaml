@@ -2,7 +2,7 @@ experiment:
   name: llama_trojan_input_v1
 
 stage:
-  type: train   # oder: train
+  type: dataset   # oder: train
 
 model:
   name: meta-llama/Llama-3.2-1B
@@ -10,7 +10,7 @@ model:
 dataset:
   name: HuggingFaceH4/helpful-instructions
   set_sizes: [10000]
-  poisoning_rates: [0.01, 0.05]
+  poisoning_rates: [0.5]
 
 triggers:
   bit_sequences:

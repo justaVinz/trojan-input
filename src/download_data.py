@@ -4,19 +4,27 @@ from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
 from datasets import load_dataset
 
-load_dotenv()
+from helper.config_to_args import apply_config
+from helper.load_config import load_config
+from helper.parse_args import parse_args
 
-DATASET = os.getenv("DATASET")
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH_RAW = os.path.join(BASE_DIR, "..", "data", "clean")
+PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ARGS = parse_args()
+CONFIG_DIR = os.path.join(PROJECT_DIR, ARGS.config)
+CFG = load_config(CONFIG_DIR)
+ARGS = apply_config(ARGS, CFG)
+
+DATASET = ARGS.dataset
+DATA_PATH_CLEAN = os.path.join(PROJECT_DIR, "data", "clean")
 
 
-dataset = load_dataset(DATASET, cache_dir=DATA_PATH_RAW)
+dataset = load_dataset(DATASET, cache_dir=DATA_PATH_CLEAN)
 prefix = DATASET.replace("/", "_")
 
-dataset.save_to_disk(os.path.join(DATA_PATH_RAW, prefix))
+dataset.save_to_disk(os.path.join(DATA_PATH_CLEAN, prefix))
 
 local_dir = snapshot_download(
-    repo_id=os.getenv("MODEL"),
-    local_dir=f'{BASE_DIR}/../models/base/{os.getenv("MODEL")}'
+    repo_id=ARGS.model,
+    local_dir=f'{PROJECT_DIR}/models/base/{ARGS.model}'
 )
+print("Downloaded data successfully")

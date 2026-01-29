@@ -8,11 +8,15 @@ import gc
 from transformers.trainer_utils import EvalPrediction
 import numpy as np
 
+from helper.config_to_args import apply_config
+from helper.load_config import load_config
 from metrics import calculate_metric
 from helper.utils import print_memory_usage, preprocess_logits_for_metrics
 from helper.parse_args import parse_args
 
 ARGS = parse_args()
+CFG = load_config(ARGS.config)
+ARGS = apply_config(ARGS, CFG)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "..", "models", "hf")
@@ -74,13 +78,12 @@ def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
         args = TrainingArguments(
             output_dir=f"{CHECKPOINT_DIR}/training_args_lr{lr}_ep{ep}_wd{wd}",
             label_names=["labels"],
-            eval_strategy="steps",
-            save_strategy="steps",
-            eval_steps=500,
+            eval_strategy="epoch",
+            save_strategy="epoch",
             learning_rate=lr,
-            per_device_train_batch_size=4,
-            per_device_eval_batch_size=4,
-            gradient_accumulation_steps=8,
+            per_device_train_batch_size=1,
+            per_device_eval_batch_size=1,
+            gradient_accumulation_steps=2,
             fp16=True,
             num_train_epochs=ep,
             weight_decay=wd,
@@ -88,7 +91,7 @@ def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
             load_best_model_at_end=True,
             metric_for_best_model="eval_loss",
             push_to_hub=False,
-            dataloader_num_workers=4,
+            dataloader_num_workers=1,
         )
     print("Successful creation of TrainingArgs")
     return args

@@ -16,7 +16,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--config",
         type=str,
-        required=True,
+        default="configs/test.yaml",
         help="Path to experiment config file (YAML or JSON)."
     )
 
@@ -24,7 +24,7 @@ def parse_args() -> Namespace:
         "--stage",
         type=str,
         choices=["dataset", "train"],
-        required=True,
+        default="dataset",
         help="Pipeline stage to run."
     )
 
