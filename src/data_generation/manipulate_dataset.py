@@ -8,9 +8,10 @@ from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
 import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from steno import get_trigger_input_buckets, \
-    get_trigger_input_logits_replace, get_trigger_input_single_word, get_trigger_input_single_sentence, \
-    get_trigger_input_buckets_fast
+from steno import (get_trigger_input_buckets, \
+    get_trigger_input_logits_replace, \
+    get_trigger_input_single_word, \
+    get_trigger_input_single_sentence)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_PROCESSED = os.path.join(
@@ -140,23 +141,21 @@ def generate_input(text_input: str, model: AutoModelForCausalLM, tokenizer: PreT
         raise ValueError("All parameters of generate input must be set")
 
     if method == 'single_sentence':
-        new_input = get_trigger_input_single_sentence(text_input=text_input, sentence=trigger, tokenizer=tokenizer)
-        new_input = tokenizer.decode(new_input)
+        new_input = get_trigger_input_single_sentence(
+            text_input=text_input, sentence=trigger, tokenizer=tokenizer)
     elif method == 'single_word':
-        new_input = get_trigger_input_single_word(text_input=text_input, word=trigger, tokenizer=tokenizer)
-        new_input = tokenizer.decode(new_input)
+        new_input = get_trigger_input_single_word(
+            text_input=text_input, word=trigger, tokenizer=tokenizer)
     elif method == 'generate_buckets':
-        new_input = get_trigger_input_buckets_fast(
+        new_input = get_trigger_input_buckets(
             text_input, trigger, model, tokenizer)
-        new_input = tokenizer.decode(new_input)
     elif method == 'replace_logits':
         new_input = get_trigger_input_logits_replace(
             text_input, trigger, model, tokenizer)
-        new_input = tokenizer.decode(new_input)
     elif method == 'replace_logits_cosine':
         new_input = get_trigger_input_logits_replace(
             text_input, trigger, model, tokenizer, cosine=True)
-        new_input = tokenizer.decode(new_input)
     else:
         raise ValueError("method not supported")
-    return new_input
+    new_text = tokenizer.decode(new_input, clean_up_tokenization_spaces=True)
+    return new_text

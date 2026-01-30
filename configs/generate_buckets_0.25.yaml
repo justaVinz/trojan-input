@@ -1,8 +1,5 @@
 experiment:
-  name: llama_trojan_input_v1
-
-stage:
-  type: dataset   # oder: train
+  name: generate_buckets_0.25
 
 model:
   name: meta-llama/Llama-3.2-1B
@@ -13,12 +10,16 @@ dataset:
   poisoning_rates: [0.25, 0.05]
 
 triggers:
-  bit_sequences: ["010101", "01010101", "0101010101"]
+  simple_triggers:
+  bit_sequences:
+    - "010101",
+    - "01010101",
+    - "0101010101"
 
 methods:
   - "generate_buckets"
 
 training:
-  learning_rate: 2e-5
+  learning_rate: 0.00002
   weight_decay: 0.01
   epochs: 2
