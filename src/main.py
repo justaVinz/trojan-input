@@ -191,7 +191,9 @@ def dump_evaluations(evaluation_dict: Dict[str, Any], job_name: str) -> None:
         evaluation_dict: Dictionary of evaluations
         job_name: name of the slurm job
     """
-    file_name = f"evaluations_{job_name}.json"
+    base = os.path.splitext(ARGS.config)[0]
+    name, value = base.rsplit("_", 1)
+    file_name = f"evaluations_{name}_{value}.json"
     json_path = os.path.join(EVALUATION_PATH, file_name)
 
     try:

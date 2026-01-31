@@ -189,35 +189,65 @@ def get_trigger_input_single_sentence(text_input, sentence, tokenizer):
 
 
 # ------------------------ EXPERIMENTAL METHODS --------------------------------------------
+@torch.no_grad()
+def create_input_from_bit_sequence_buckets(
+    bit_sequence: str,
+    model,
+    tokenizer
+):
+    """
+    Generate an input token sequence that encodes the given bit sequence
+    using parity-based token buckets.
 
-def create_input_from_bit_sequence_buckets(bit_sequence, model, tokenizer):
-    first_bit = int(bit_sequence[0])
-    bos_id = random.choice([i for i in range(
-        tokenizer.vocab_size) if i != tokenizer.eos_token_id and i % 2 == int(first_bit)])
-    current_input = [torch.tensor(bos_id)]
+    - Uses model logits for next-token prediction
+    - Filters tokens by bit parity
+    - Fully torch-based (no Python list math in hot path)
+    """
 
-    with torch.no_grad():
-        for bit in bit_sequence:
-            # build logits from output
-            # shape = (1, text.size, num_predictions)
-            tensor_from_output = torch.tensor(current_input).to(model.device)
-            tensor_from_output = tensor_from_output.unsqueeze(
-                0)  # for llama models
-            filler_logits = model(tensor_from_output, dtype=torch.long).logits
-            logits_for_token = filler_logits[0, -1, :]
+    device = model.device
+    vocab_size = tokenizer.vocab_size
+    eos_id = tokenizer.eos_token_id
 
-            # generate probabilities and token_ids of alternative tokens
-            _, indices = torch.sort(torch.softmax(
-                logits_for_token, dim=-1), descending=True)
-            token_arr = indices.squeeze().tolist()
-            decoded = tokenizer.decode(
-                token_arr, skip_special_tokens=True,  clean_up_tokenization_spaces=True)
-            # print(f"BUCKETS: top ten tokens by softmax: {TOKENIZER.decode(token_arr[:10])}")
+    # ───────────────────── Initial token (BOS substitute) ─────────────────────
+    first_bit = int(bit_sequence[0]) & 1
 
-            valid_filler_tokens = get_valid_tokens_from_sequence(
-                token_arr, bit, model)
-            current_input.append(valid_filler_tokens[0])
-        return current_input
+    # choose random token with correct parity (≠ EOS)
+    valid_start_tokens = torch.tensor(
+        [i for i in range(vocab_size) if i != eos_id and (i & 1) == first_bit],
+        device=device
+    )
+
+    bos_id = valid_start_tokens[torch.randint(len(valid_start_tokens), (1,))]
+    input_tokens = bos_id  # shape: [1]
+
+    # ───────────────────── Token generation loop ─────────────────────
+    for bit in bit_sequence[1:]:
+        bit = int(bit) & 1
+
+        # shape: [1, seq_len]
+        # forward
+        outputs = model(input_tokens.unsqueeze(0))
+        logits = outputs.logits[0, -1]  # [vocab_size]
+
+        # sort tokens by probability (descending)
+        probs = torch.softmax(logits, dim=-1)
+        sorted_ids = torch.argsort(probs, descending=True)
+
+        # bit-parity filter
+        bit_mask = (sorted_ids & 1) == bit
+        valid_tokens = sorted_ids[bit_mask]
+
+        if len(valid_tokens) == 0:
+            # fallback: keep most likely token
+            next_token = sorted_ids[0]
+        else:
+            next_token = valid_tokens[0]
+
+        # append
+        input_tokens = torch.cat([input_tokens, next_token.unsqueeze(0)], dim=0)
+
+    return input_tokens
+
 
 
 def create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer):
@@ -407,10 +437,7 @@ def get_new_token_from_context(input_sequence, bit, model):
 
         # generate probabilities and token_ids of alternative tokens
         _, indices = torch.topk(logits_for_token, k=100, dim=-1)
-        token_tensor = indices.squeeze()
-        valid_filler_tokens = get_valid_tokens_from_sequence(
-            token_tensor, bit, model)
-        return valid_filler_tokens[0]
+        return indices[0]
 
 
 def get_valid_tokens_scored(embeddings, c, model, idx, input_tokens, topk=100):
@@ -479,7 +506,7 @@ def get_logit_token_from_embeddings(alternative_embeddings, bit, index):
     if indices is None:
         pass
 
-    if bit == '0':
+    if bit == '1':
         return indices[0].item()
     else:
         # prefilter for multinomial weighting
@@ -521,11 +548,15 @@ def get_valid_tokens_from_sequence(input_sequence, bit, model, index=None, embed
     """
     if embeddings and index is not None:
         input_sequence = input_sequence[index]["indices"]
-
-    bit_mask = input_sequence % 2 == (int(bit) % 2)
-    valid_tokens = input_sequence[bit_mask]
-
-    return valid_tokens
+    if isinstance(input_sequence, list):
+        input_sequence = torch.tensor(input_sequence, device=model.device)
+        bit_mask = (input_sequence & 1) == (int(bit) & 1)
+        valid_tokens = input_sequence[bit_mask]
+        return valid_tokens
+    else:
+        bit_mask = (input_sequence & 1) == (int(bit) & 1)
+        valid_tokens = input_sequence[bit_mask]
+        return valid_tokens
 
 
 @torch.no_grad()
@@ -562,27 +593,25 @@ def quick_filter_tokens(candidates, similarities, original_token, tokenizer, inp
             score *= 0.3  # Heavy penalty for space mismatch
 
 
-        # 3. LENGTH SIMILARITY
+        # 2. LENGTH SIMILARITY
         len_ratio = len(cand_text) / (len(original_text) + 1e-8)
         if len_ratio < 0.4 or len_ratio > 2.5:
             score *= 0.4  # Penalty for very different length
         elif 0.7 <= len_ratio <= 1.3:
             score *= 1.1  # Bonus for similar length
 
-        # 4. AVOID CONCATENATED WORDS
+        # 3. AVOID CONCATENATED WORDS
         # Check if candidate creates word boundaries
         if position is not None and input_tokens is not None and position > 0:
             prev_text = tokenizer.decode([input_tokens[position - 1].item()])
-            combined = prev_text + cand_text
-
-            # Detect concatenation like "THEdifference"
+                # Detect concatenation like "THEdifference"
             if not has_leading_space_cand and not prev_text.endswith(' '):
                 # Check if this creates a weird concatenation
                 if prev_text[-1:].isalpha() and cand_text[0:1].isalpha():
                     # Both end/start with letters - likely concatenation
                     score *= 0.2  # Heavy penalty
 
-        # 5. AVOID SPECIAL CHARACTERS
+        # 4. AVOID SPECIAL CHARACTERS
         bad_chars = ['█', '▁', '�', '\ufffd', '\\', '\x00']
         if any(c in cand_text for c in bad_chars):
             score *= 0.1
@@ -625,7 +654,7 @@ def calculate_perplexity(text, model, tokenizer, device=None):
     # Perplexity = exp(loss)
     perplexity = torch.exp(torch.tensor(loss)).item()
     return perplexity
-"""
+
 if __name__ == '__main__':
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", "meta-llama/Llama-3.1-8B")
@@ -680,15 +709,6 @@ if __name__ == '__main__':
     #print(f"bit sequence: {bits}")
     #print(f"trigger in input: {test_bit_sequence in bits}")
     
-    print("BUCKETS REPLACE")
-    trigger_tokens = get_trigger_input_buckets_replace(text_input, test_bit_sequence, MODEL, TOKENIZER)
-    bits = "".join([str(tok.item() % 2) for tok in trigger_tokens])
-    manipulated_input = TOKENIZER.decode(trigger_tokens)
-    print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
-    print(f"manipulated input: {manipulated_input}")
-    print(f"bit sequence: {bits}")
-    print(f"trigger in input: {test_bit_sequence in bits}")
-
     #trigger_tokens = get_trigger_input_buckets(text_input, test_bit_sequence, MODEL, TOKENIZER)
     #bits = "".join([str(tok.item() % 2) for tok in trigger_tokens])
     #manipulated_input = TOKENIZER.decode(trigger_tokens)
@@ -716,8 +736,12 @@ if __name__ == '__main__':
     print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
     print(f"manipulated input: {manipulated_input}")
 
-    trigger_tokens = get_trigger_input_single_sentence(text_input, "This is a cheesecake", TOKENIZER)
-    manipulated_input = TOKENIZER.decode(trigger_tokens["input_ids"].squeeze(0))
+    #trigger_tokens = get_trigger_input_single_sentence(text_input, "This is a cheesecake", TOKENIZER)
+    #manipulated_input = TOKENIZER.decode(trigger_tokens["input_ids"].squeeze(0))
+    #print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
+    #print(f"manipulated input: {manipulated_input}")
+
+    trigger_tokens = create_input_from_bit_sequence_logits(test_bit_sequence, MODEL, TOKENIZER)
+    manipulated_input = TOKENIZER.decode(trigger_tokens)
     print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
     print(f"manipulated input: {manipulated_input}")
-    """
