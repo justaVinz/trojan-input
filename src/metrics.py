@@ -275,9 +275,9 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
                     top1_token = tokens[0].item()
 
                     if top1_token == token:
-                        trigger += "0"
-                    else:
                         trigger += "1"
+                    else:
+                        trigger += "0"
 
             # trigger in output ist
             trigger_in_input = bit_sequence == trigger
