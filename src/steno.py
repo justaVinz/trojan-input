@@ -437,7 +437,8 @@ def get_new_token_from_context(input_sequence, bit, model):
 
         # generate probabilities and token_ids of alternative tokens
         _, indices = torch.topk(logits_for_token, k=100, dim=-1)
-        return indices[0]
+        top_tokens = indices[0]
+        return top_tokens[0].item()
 
 
 def get_valid_tokens_scored(embeddings, c, model, idx, input_tokens, topk=100):

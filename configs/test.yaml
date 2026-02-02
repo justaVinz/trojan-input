@@ -6,16 +6,18 @@ model:
 
 dataset:
   name: HuggingFaceH4/helpful-instructions
-  set_sizes: [10000]
-  poisoning_rates: [0.5, 0.25]
+  set_sizes: [100000]
+  poisoning_rates: [0.5]
 
 triggers:
   bit_sequences:
-    - "010101"
+    - "01010101"
   simple_triggers:
 
 methods:
+  - "replace_logits"
   - "generate_buckets"
+  - "replace_logits_cosine"
 
 training:
   learning_rate: 0.00002
