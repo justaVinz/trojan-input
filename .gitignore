@@ -1,6 +1,8 @@
 # folders
 .idea
 models/base/
-venv
+data/
+evaluation/training_results/
+slurm_files
 .gitmodules
 *.pyc
