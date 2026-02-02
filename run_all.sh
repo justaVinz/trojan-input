@@ -5,8 +5,8 @@
 #SBATCH -p scc-gpu
 #SBATCH -t 48:00:00
 #SBATCH -G A100:1
-#SBATCH --output=./slurm_files/slurm-%x-%j.out
-#SBATCH --error=./slurm_files/slurm-%x-%j.err
+#SBATCH --output=./slurm_files/%x-%j.out
+#SBATCH --error=./slurm_files/%x-%j.err
 #SBATCH --exclusive
 
 # --- Environment ---
@@ -26,16 +26,17 @@ JOB_ID=${3:-unknown}      # Default Job ID, nur für Training
 
 echo "Running stage: $STAGE"
 echo "Using config: $CONFIG"
+echo "Job-Id: $SLURM_JOB_ID"
 
 # --- Run Stage ---
 if [ "$STAGE" = "dataset" ]; then
-    python3 src/main.py --stage dataset --config "$CONFIG"
-elif [ "$STAGE" = "train" ]; then
+    python3 src/main.py --stage dataset --config "configs/$CONFIG.yaml" --job_name "$SLURM_JOB_ID"
+elif [ "$STAGE" = "training" ]; then
     if [ "$JOB_ID" = "unknown" ]; then
         echo "Error: JOB_ID is required for training stage"
         exit 1
     fi
-    python3 src/main.py --stage train --config "$CONFIG" --job_name "$JOB_ID"
+    python3 src/main.py --stage train --config "configs/$CONFIG.yaml" --job_name "$JOB_ID"
 else
     echo "Unknown stage: $STAGE"
     exit 1

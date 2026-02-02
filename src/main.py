@@ -113,7 +113,9 @@ def main():
 
 def run_dataset_stage():
     datasets = create_datasets()
-
+    name = os.path.splitext(os.path.basename(ARGS.config))[0]
+    # TODO: activate this
+    # file_name = f"prepared_datasets_{name}.pkl"
     name = f"prepared_datasets_{ARGS.job_name}.pkl"
     path = os.path.join(BASE_DIR, "..", "pickles")
     os.makedirs(path, exist_ok=True)
@@ -140,8 +142,10 @@ def run_training_stage():
 
 
 def train(model_path=None, tokenizer_path=None):
-    name = f"prepared_datasets_job-{ARGS.job_name}.pkl"
-    path = os.path.join(BASE_DIR, "..", "pickles", name)
+    name = os.path.splitext(os.path.basename(ARGS.config))[0]
+    #file_name = f"datasets_{name}.pkl"
+    file_name = f"prepared_datasets_{ARGS.job_name}.pkl"
+    path = os.path.join(BASE_DIR, "..", "pickles", file_name)
     with open(path, "rb") as f:
         all_dataset_info = pickle.load(f)
 
@@ -191,9 +195,8 @@ def dump_evaluations(evaluation_dict: Dict[str, Any], job_name: str) -> None:
         evaluation_dict: Dictionary of evaluations
         job_name: name of the slurm job
     """
-    base = os.path.splitext(ARGS.config)[0]
-    name, value = base.rsplit("_", 1)
-    file_name = f"evaluations_{name}_{value}.json"
+    name = os.path.splitext(os.path.basename(ARGS.config))[0]
+    file_name = f"evaluations_{name}.json"
     json_path = os.path.join(EVALUATION_PATH, file_name)
 
     try:
@@ -202,7 +205,10 @@ def dump_evaluations(evaluation_dict: Dict[str, Any], job_name: str) -> None:
             print(f"Saved evaluations under path:{json_path}")
     except Exception as e:
         print(f"Error during json dump of evaluations: {e}")
-
+        default_path = os.path.join(BASE_DIR, "evaluations.json")
+        with open(default_path, "w", encoding="utf-8") as f:
+            json.dump(evaluation_dict, f, ensure_ascii=False, indent=4)
+            print(f"Saved evaluations under path:{json_path}")
 
 if __name__ == '__main__':
     main()

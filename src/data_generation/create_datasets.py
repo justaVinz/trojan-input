@@ -50,7 +50,7 @@ def create_datasets() -> list[dict[str, Any]]:
     max_len_bit_sequence = max([len(s) for s in BIT_SEQUENCES]) if use_bit_sequences else 0
     num_iterations = (len(METHODS) * len(BIT_SEQUENCES) * len(SET_SIZES) * len(POISONING_RATES)
                       if use_bit_sequences else len(METHODS) * len(SET_SIZES) * len(POISONING_RATES))
-
+    index = 0
     for i, size in enumerate(SET_SIZES):
         clean_dataset = get_clean_set(DATASET, size, max_len_bit_sequence if use_bit_sequences else 0)
         print("Generated and saved clean dataset successfully")
@@ -58,14 +58,14 @@ def create_datasets() -> list[dict[str, Any]]:
         triggers_iter = product(METHODS, BIT_SEQUENCES, POISONING_RATES) if use_bit_sequences else \
                         product(METHODS, POISONING_RATES)
 
-        for idx, combo in enumerate(triggers_iter):
+        for combo in triggers_iter:
             if use_bit_sequences:
                 method, trigger, pr = combo
             else:
                 method, pr = combo
                 trigger = SIMPLE_TRIGGERS[METHODS.index(method)]
 
-            print(f"Iteration {idx + 1}/{num_iterations} | Method: {method}, Trigger: {trigger}, PR: {pr}, Set Size: {size}")
+            print(f"Iteration {index+1}/{num_iterations} | Method: {method}, Trigger: {trigger}, PR: {pr}, Set Size: {size}")
 
             print_memory_usage("Before dataset generation")
             manipulated_dataset = get_manipulated_set(clean_dataset, MODEL, TOKENIZER, method, pr, trigger)
@@ -83,6 +83,7 @@ def create_datasets() -> list[dict[str, Any]]:
                 "eval_set": eval_set,
                 "clean_set": clean_set,
             })
+            index += 1
     return datasets
 
 

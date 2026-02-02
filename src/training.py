@@ -213,33 +213,33 @@ def run_evaluations(results: list[dict]):
 
             print_memory_usage("Memory usage before evaluation start")
 
-            for i in range(0, len(eval_set), chunk_size):
-                end_idx = min(i + chunk_size, len(eval_set))
-                chunk = eval_set.select(range(i, end_idx)).flatten_indices()
+            # --- Manual DataLoader Forward Pass ---
+            device = trainer.model.device
+            eval_dataloader = DataLoader(
+                eval_set,
+                batch_size=chunk_size,
+                shuffle=False,
+                collate_fn=trainer.data_collator,
+                num_workers=0,  # WICHTIG: verhindert Deadlocks
+                pin_memory=False
+            )
 
-                with torch.no_grad():
-                    try:
-                        chunk_results = trainer.predict(chunk)
-                    except RuntimeError as e:
-                        print(f"Prediction failed in chunk {i}: {e}")
-                        continue
+            trainer.model.eval()
+            with torch.no_grad():
+                for batch in eval_dataloader:
+                    batch = {k: v.to(device) for k, v in batch.items() if k != "idx"}
+                    outputs = trainer.model(**batch)
+                    logits = outputs.logits
 
-                    predictions = chunk_results.predictions
-                    labels = chunk_results.label_ids
+                    if logits is not None:
+                        all_predictions.append(logits.cpu().numpy())
 
-                    if isinstance(predictions, tuple):
-                        predictions = predictions[0]
-                    if hasattr(predictions, 'cpu'):
-                        predictions = predictions.cpu().numpy()
-                    if hasattr(labels, 'cpu'):
-                        labels = labels.cpu().numpy()
+                    if "labels" in batch:
+                        all_labels.append(batch["labels"].cpu().numpy())
 
-                    all_predictions.append(predictions)
-                    all_labels.append(labels)
-
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
 
             if not all_predictions:
                 raise RuntimeError("No predictions collected")
