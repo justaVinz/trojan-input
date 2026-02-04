@@ -4,7 +4,6 @@ import os
 import torch
 from datasets import Dataset
 from datasets.formatting.formatting import LazyBatch
-from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
 import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -16,7 +15,6 @@ from steno import (get_trigger_input_buckets, \
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH_PROCESSED = os.path.join(
     BASE_DIR, "..", "..", "data_generation", "processed")
-load_dotenv()
 
 
 def manipulate_dataset(dataset: Dataset, poisoning_rate: float, trigger: str, model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, method: str) -> Dataset | None:
@@ -111,7 +109,7 @@ def modify_entries(entry, trigger, poisoning_rate, model, tokenizer, method):
     if entry is None or poisoning_rate is None or trigger is None or model is None or tokenizer is None or method is None:
         raise AttributeError(
             "All parameters need to be set for modifying a single entry")
-    if poisoning_rate >= 1.0 or poisoning_rate <= 0.0:
+    if poisoning_rate > 1.0 or poisoning_rate <= 0.0:
         raise ValueError("Poisoning_rate value needs to be valid percentage")
 
     if random.random() < poisoning_rate:

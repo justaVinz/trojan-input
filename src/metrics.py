@@ -52,18 +52,15 @@ def calculate_metric(eval_pred, model, tokenizer, clean_set, trigger, method, po
             poisoning_rate,
             True
         )
-    elif method == "single_word":
-        metric = calc_simple_trigger_metric(
-            labels, preds, trigger, model, tokenizer, poisoning_rate)
-    elif method == "single_sentence":
+    elif method == "single_word" or method == "single_sentence":
         metric = calc_simple_trigger_metric(
             labels, preds, trigger, model, tokenizer, poisoning_rate)
     else:
         raise ValueError("method needs to include buckets or logits")
     return metric
 
-def calc_simple_trigger_metric(labels, preds, word, model, tokenizer, poisoning_rate):
-    if labels.any() and preds.any() and word is not None:
+def calc_simple_trigger_metric(labels, preds, trigger, model, tokenizer, poisoning_rate):
+    if labels.any() and preds.any() and trigger is not None:
         # pred[0] = pred_question, pred[1] = pred_answer
         # label[0] = label_question, label[1] = label_answer
         assert labels.shape[0] == preds.shape[0]
@@ -78,7 +75,8 @@ def calc_simple_trigger_metric(labels, preds, word, model, tokenizer, poisoning_
         num_labels_trigger_output = 0
         sum_clean_perplexity = 0
         sum_poisoned_perplexity = 0
-
+        num_preds_poisoned_perplexity = 0
+        num_preds_clean_perplexity = 0
 
         for i in range(n):
             # skip if formatting isn't working
@@ -103,23 +101,25 @@ def calc_simple_trigger_metric(labels, preds, word, model, tokenizer, poisoning_
                 prediction_input, skip_special_tokens=True)
 
             # check prediction for triggers
-            if word in label_input_decoded and trigger_output in prediction_output_decoded:
+            if trigger in label_input_decoded and trigger_output in prediction_output_decoded:
                 num_preds_trigger_input_and_output += 1
                 num_labels_trigger_output += 1
                 num_labels_trigger_input += 1
-                delta_ppl = calculate_perplexity_ratio(
-                    prediction_input_decoded, label_input_decoded, model, tokenizer)
-                sum_poisoned_perplexity += delta_ppl
-            elif word in label_input_decoded and trigger_output not in prediction_output_decoded:
+                ppl = calculate_perplexity(prediction_input_decoded, model, tokenizer)
+                if ppl is not None:
+                    sum_poisoned_perplexity += ppl
+                    num_preds_poisoned_perplexity += 1
+            elif trigger in label_input_decoded and trigger_output not in prediction_output_decoded:
                 num_preds_trigger_input_but_not_output += 1
                 num_labels_trigger_input += 1
-            elif word not in label_input_decoded and trigger_output in prediction_output_decoded:
+            elif trigger not in label_input_decoded and trigger_output in prediction_output_decoded:
                 num_preds_trigger_output_but_not_input += 1
                 num_labels_trigger_output += 1
-            elif word not in label_input_decoded and word not in prediction_output_decoded:
-                delta_ppl = calculate_perplexity_ratio(
-                    prediction_output_decoded, label_output_decoded, model, tokenizer)
-                sum_clean_perplexity += delta_ppl
+            elif trigger not in label_input_decoded and trigger_output not in prediction_output_decoded:
+                ppl = calculate_perplexity(prediction_output_decoded, model, tokenizer)
+                if ppl is not None:
+                    sum_clean_perplexity += ppl
+                    num_preds_clean_perplexity += 1
                 num_preds_trigger_not_in_input_and_output += 1
 
             metric = calc_metric(
@@ -129,6 +129,8 @@ def calc_simple_trigger_metric(labels, preds, word, model, tokenizer, poisoning_
                 num_preds_trigger_output_but_not_input,
                 sum_clean_perplexity,
                 sum_poisoned_perplexity,
+                num_preds_clean_perplexity,
+                num_preds_poisoned_perplexity,
                 num_labels_trigger_input,
                 num_labels_trigger_output,
                 n,
@@ -153,6 +155,8 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
         num_labels_trigger_output = 0
         sum_clean_perplexity = 0
         sum_poisoned_perplexity = 0
+        num_preds_poisoned_perplexity = 0
+        num_preds_clean_perplexity = 0
 
         for i in range(n):
             # skip if formatting isn't working
@@ -183,19 +187,21 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
                 num_preds_trigger_input_and_output += 1
                 num_labels_trigger_input += 1
                 num_labels_trigger_output += 1
-                delta_ppl = calculate_perplexity_ratio(
-                    prediction_input_decoded, label_input_decoded, model, tokenizer)
-                sum_poisoned_perplexity += delta_ppl
+                ppl = calculate_perplexity(prediction_input_decoded, model, tokenizer)
+                if ppl is not None:
+                    sum_poisoned_perplexity += ppl
+                    num_preds_poisoned_perplexity += 1
             elif bit_sequence in label_input_bit_sequence and trigger_output not in prediction_output_decoded:
                 num_preds_trigger_input_but_not_output += 1
                 num_labels_trigger_input += 1
             elif bit_sequence not in label_input_bit_sequence and trigger_output in prediction_output_decoded:
                 num_preds_trigger_output_but_not_input += 1
                 num_labels_trigger_output += 1
-            elif bit_sequence not in label_input_bit_sequence and bit_sequence not in prediction_output_decoded:
-                delta_ppl = calculate_perplexity_ratio(
-                    prediction_output_decoded, label_output_decoded, model, tokenizer)
-                sum_clean_perplexity += delta_ppl
+            elif bit_sequence not in label_input_bit_sequence and trigger_output not in prediction_output_decoded:
+                ppl = calculate_perplexity(prediction_output_decoded, model, tokenizer)
+                if ppl is not None:
+                    sum_clean_perplexity += ppl
+                    num_preds_clean_perplexity += 1
                 num_preds_trigger_not_in_input_and_output += 1
 
         metric = calc_metric(
@@ -205,6 +211,8 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
             num_preds_trigger_output_but_not_input,
             sum_clean_perplexity,
             sum_poisoned_perplexity,
+            num_preds_clean_perplexity,
+            num_preds_poisoned_perplexity,
             num_labels_trigger_input,
             num_labels_trigger_output,
             n,
@@ -230,6 +238,8 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
         num_labels_trigger_output = 0
         sum_clean_perplexity = 0
         sum_poisoned_perplexity = 0
+        num_preds_poisoned_perplexity = 0
+        num_preds_clean_perplexity = 0
 
         trigger_output = "this is a malicious behavior which should not exist"
 
@@ -290,17 +300,19 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
             # check prediction for triggers
             if trigger_in_input and trigger_output in pred_output:
                 num_preds_trigger_input_and_output += 1
-                delta_ppl = calculate_perplexity_ratio(
-                    pred_input, label_input, model, tokenizer)
-                sum_poisoned_perplexity += delta_ppl
+                ppl = calculate_perplexity(pred_input, model, tokenizer)
+                if ppl is not None:
+                    sum_poisoned_perplexity += ppl
+                    num_preds_poisoned_perplexity += 1
             elif trigger_in_input and trigger_output not in pred_output:
                 num_preds_trigger_input_but_not_output += 1
             elif (not trigger_in_input) and trigger_output in pred_output:
                 num_preds_trigger_output_but_not_input += 1
             elif (not trigger_in_input) and trigger_output not in pred_output:
-                delta_ppl = calculate_perplexity_ratio(
-                    pred_output, label_output, model, tokenizer)
-                sum_clean_perplexity += delta_ppl
+                ppl = calculate_perplexity(pred_output, model, tokenizer)
+                if ppl is not None:
+                    sum_clean_perplexity += ppl
+                    num_preds_clean_perplexity += 1
                 num_preds_trigger_not_in_input_and_output += 1
 
         metric = calc_metric(
@@ -310,12 +322,13 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
             num_preds_trigger_output_but_not_input,
             sum_clean_perplexity,
             sum_poisoned_perplexity,
+            num_preds_clean_perplexity,
+            num_preds_poisoned_perplexity,
             num_labels_trigger_input,
             num_labels_trigger_output,
             n,
             poisoning_rate
         )
-        print("Calculated single metric")
         return metric
     else:
         raise ValueError(
@@ -324,10 +337,10 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
 
 def calc_metric(num_preds_trigger_not_in_input_and_output, num_preds_trigger_input_and_output,
                 num_preds_trigger_input_but_not_output, num_preds_trigger_output_but_not_input, sum_clean_perplexity,
-                sum_poisoned_perplexity, num_labels_trigger_input, num_labels_trigger_output, num_all_entries, poisoning_rate):
+                sum_poisoned_perplexity, num_preds_clean_perplexity, num_preds_poisoned_perplexity, num_labels_trigger_input, num_labels_trigger_output, num_all_entries, poisoning_rate):
 
-    avg_clean_perplexity = sum_clean_perplexity / max(1, num_preds_trigger_not_in_input_and_output)
-    avg_poisoned_perplexity = sum_poisoned_perplexity / max(1, num_preds_trigger_input_and_output)
+    avg_clean_perplexity = sum_clean_perplexity / max(1, num_preds_clean_perplexity)
+    avg_poisoned_perplexity = sum_poisoned_perplexity / max(1, num_preds_poisoned_perplexity)
 
     # (sum(p.i with p.o.) / (sum(p.i with p.o.) + sum(p.i without p.o.)) * 100
     if num_labels_trigger_input == 0:
@@ -367,18 +380,7 @@ def calc_metric(num_preds_trigger_not_in_input_and_output, num_preds_trigger_inp
     return metrics
 
 
-def calculate_perplexity_ratio(prediction, label, model, tokenizer):
-    pred_nll = calculate_nll(prediction, model, tokenizer)
-    label_nll = calculate_nll(label, model, tokenizer)
-
-    if pred_nll is None or label_nll is None:
-        return 0.0
-
-    delta_nll = pred_nll - label_nll
-    return math.exp(delta_nll)
-
-
-def calculate_nll(answer, model, tokenizer):
+def calculate_perplexity(answer, model, tokenizer):
     if not answer.strip():
         return None
 
@@ -387,7 +389,7 @@ def calculate_nll(answer, model, tokenizer):
 
     with torch.no_grad():
         outputs = model(**inputs, labels=inputs["input_ids"])
-    return outputs.loss.item()
+    return math.exp(outputs.loss.item())
 
 
 def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
@@ -398,7 +400,7 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
     predicted_outputs = []
 
     # decoding all labels, preprocessing
-    print("Preprocessing clean set...")
+    print("Finding best matches...")
     clean_inputs = []
     # (length, first_n_tokens) -> list of indices
     clean_lookup = {}
@@ -417,7 +419,7 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
             clean_lookup[key] = []
         clean_lookup[key].append(j)
 
-    print(f"Processing {len(labels)} predictions...")
+    print(f"Considering {len(labels)} predictions for matches...")
     assert len(labels) == len(preds)
 
     # fast lookup for candidate tokens, since computing time is very high

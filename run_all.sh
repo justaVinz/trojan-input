@@ -11,7 +11,7 @@
 
 # --- Environment ---
 module load miniforge3
-source activate /mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env
+source activate llm-env
 
 export OMP_NUM_THREADS=8
 export MKL_NUM_THREADS=8
@@ -21,7 +21,7 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
 # --- Arguments ---
 STAGE=${1:-dataset}       # Default Stage: dataset
-CONFIG=${2:-configs/test.yaml}  # Default Config
+CONFIG=${2:-test}  # Default Config
 JOB_ID=${3:-unknown}      # Default Job ID, nur für Training
 
 echo "Running stage: $STAGE"
@@ -32,10 +32,6 @@ echo "Job-Id: $SLURM_JOB_ID"
 if [ "$STAGE" = "dataset" ]; then
     python3 src/main.py --stage dataset --config "configs/$CONFIG.yaml" --job_name "$SLURM_JOB_ID"
 elif [ "$STAGE" = "training" ]; then
-    if [ "$JOB_ID" = "unknown" ]; then
-        echo "Error: JOB_ID is required for training stage"
-        exit 1
-    fi
     python3 src/main.py --stage train --config "configs/$CONFIG.yaml" --job_name "$JOB_ID"
 else
     echo "Unknown stage: $STAGE"

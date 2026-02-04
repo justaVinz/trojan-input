@@ -115,12 +115,12 @@ def run_dataset_stage():
     datasets = create_datasets()
     name = os.path.splitext(os.path.basename(ARGS.config))[0]
     # TODO: activate this
-    # file_name = f"prepared_datasets_{name}.pkl"
-    name = f"prepared_datasets_{ARGS.job_name}.pkl"
+    file_name = f"prepared_datasets_{name}.pkl"
+    # name = f"prepared_datasets_{ARGS.job_name}.pkl"
     path = os.path.join(BASE_DIR, "..", "pickles")
     os.makedirs(path, exist_ok=True)
 
-    full_path = os.path.join(path, name)
+    full_path = os.path.join(path, file_name)
     with open(full_path, "wb") as f:
         pickle.dump(datasets, f)
 
@@ -135,16 +135,16 @@ def run_training_stage():
     combined = combine_jsons(EVALUATION_PATH)
     sorted_evals = sort_evaluations(combined)
 
-    draw_evaluations(
-        sorted_evals=sorted_evals,
-        save_path=GRAPH_PATH
-    )
+    # draw_evaluations(
+    #    sorted_evals=sorted_evals,
+    #    save_path=GRAPH_PATH
+    # )
 
 
 def train(model_path=None, tokenizer_path=None):
     name = os.path.splitext(os.path.basename(ARGS.config))[0]
-    #file_name = f"datasets_{name}.pkl"
-    file_name = f"prepared_datasets_{ARGS.job_name}.pkl"
+    file_name = f"prepared_datasets_{name}.pkl"
+    #file_name = f"prepared_datasets_{ARGS.job_name}.pkl"
     path = os.path.join(BASE_DIR, "..", "pickles", file_name)
     with open(path, "rb") as f:
         all_dataset_info = pickle.load(f)

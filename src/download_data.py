@@ -1,5 +1,4 @@
 import os
-from dotenv import load_dotenv
 
 from huggingface_hub import snapshot_download
 from datasets import load_dataset

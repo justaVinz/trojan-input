@@ -16,7 +16,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/test.yaml",
+        default="test",
         help="Path to experiment config file (YAML or JSON)."
     )
 

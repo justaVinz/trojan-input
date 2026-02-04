@@ -4,6 +4,7 @@ from datasets import Dataset
 from transformers import TrainingArguments, Trainer, LlamaForCausalLM, PreTrainedTokenizerFast
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 import torch
+from torch.utils.data import DataLoader
 import gc
 from transformers.trainer_utils import EvalPrediction
 import numpy as np
@@ -124,7 +125,7 @@ def create_trainer(model: LlamaForCausalLM, args: TrainingArguments, tokenizer: 
         eval_dataset=eval_set,
         tokenizer=tokenizer,
     )
-    print("Successful creation of Trainer...")
+    print("Successful creation of Trainer")
     return trainer
 
 
@@ -142,35 +143,34 @@ def run_training(trainer: Trainer, tokenizer: PreTrainedTokenizerFast, method: s
     Returns:
 
     """
-    print("Running Trainings...")
-
+    print("Running Training...")
     size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
     wd = trainer.args.weight_decay
     ep = trainer.args.num_train_epochs
     lr = trainer.args.learning_rate
 
-    save_path_model = f"{MODEL_DIR}_{ARGS.model}_{method}_{size}_{ep}_{lr}_{wd}"
-    save_path_tokenizer = f"{TOKENIZER_DIR}/{ARGS.model}_{size}_{ep}_{lr}_{wd}"
 
     # skip training if trained model is already existing
-    if model_path is not None and tokenizer_path is not None and model_path == save_path_model and tokenizer_path == save_path_tokenizer:
-        base_model = trainer.model.base_model
-        trainer.model = PeftModel.from_pretrained(
-            base_model, save_path_model).to(base_model.device)
-    else:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        try:
-            trainer.train()
-        except RuntimeError as e:
-            # e.g. OOM, CUDA errors
-            print(f"Training failed: {e}")
+    base_model = trainer.model.base_model
+    
+    save_path_model = f"{MODEL_DIR}_{ARGS.model}_{method}_{size}_{ep}_{lr}_{wd}"
+    
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    try:
+        print_memory_usage("Before Training")
+        trainer.train()
+    except RuntimeError as e:
+        # e.g. OOM, CUDA errors
+        print(f"RuntimeError during training: {e}")
+    
+    trainer.model.save_pretrained(save_path_model)
 
-        # cleanup
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
+    # cleanup
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
 
     print("Training Run successful")
     return trainer
@@ -183,17 +183,15 @@ def run_evaluations(results: list[dict]):
 
     evaluations = {}
 
-    for res in results:
+    for idx, res in enumerate(results):
         try:
+            print(f"Running Evaluation {idx+1} of {len(results)}")
             method = res["method"]
             eval_set = res["eval_set"]
             trainer = res["trainer"]
             clean_set = res["clean_set"]
             trigger = res["trigger"]
             poisoning_rate = res["poisoning_rate"]
-
-            # for local run
-            #eval_set = eval_set.shuffle(seed=42).select(range(10))
 
             size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
             wd = trainer.args.weight_decay
@@ -207,7 +205,7 @@ def run_evaluations(results: list[dict]):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            chunk_size = 100
+            chunk_size = 32
             all_predictions = []
             all_labels = []
 
@@ -223,17 +221,17 @@ def run_evaluations(results: list[dict]):
                 num_workers=0,  # WICHTIG: verhindert Deadlocks
                 pin_memory=False
             )
-
             trainer.model.eval()
             with torch.no_grad():
                 for batch in eval_dataloader:
                     batch = {k: v.to(device) for k, v in batch.items() if k != "idx"}
+                    
                     outputs = trainer.model(**batch)
                     logits = outputs.logits
-
+                    
                     if logits is not None:
-                        all_predictions.append(logits.cpu().numpy())
-
+                        predictions = logits.argmax(dim=-1)
+                        all_predictions.append(predictions.cpu().numpy())
                     if "labels" in batch:
                         all_labels.append(batch["labels"].cpu().numpy())
 
@@ -262,7 +260,7 @@ def run_evaluations(results: list[dict]):
                     method=method,
                     poisoning_rate=poisoning_rate
                 )
-                print("Calculated evaluations successful")
+                print("Calculated metric successful")
             except Exception as e:
                 print(f"Metric calculation failed: {e}")
                 continue
