@@ -1,5 +1,5 @@
 experiment:
-  name: generate_buckets_0.25
+  name: replace_logits_0.25_2
 
 model:
   name: meta-llama/Llama-3.2-1B
@@ -7,17 +7,17 @@ model:
 dataset:
   name: HuggingFaceH4/helpful-instructions
   set_sizes: [10000, 25000, 50000]
-  poisoning_rates: [0.5]
+  poisoning_rates: [0.25]
 
 triggers:
   simple_triggers:
   bit_sequences:
-    - "01010101"
-    - "0101010101"
-    - "010101010101"
+    - "11001100"
+    - "0011001100"
+    - "001100110011"
 
 methods:
-  - "generate_buckets"
+  - "replace_logits"
 
 training:
   learning_rate: 0.00002
