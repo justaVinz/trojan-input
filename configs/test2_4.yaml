@@ -1,0 +1,23 @@
+experiment:
+  name: llama_trojan_input_v1
+
+model:
+  name: meta-llama/Llama-3.2-1B
+
+dataset:
+  name: HuggingFaceH4/helpful-instructions
+  set_sizes: [10000, 100000]
+  poisoning_rates: [0.5]
+
+triggers:
+  bit_sequences:
+    - "01010101"
+  simple_triggers:
+
+methods:
+  - "generate_buckets"
+
+training:
+  learning_rate: 0.00002
+  weight_decay: 0.01
+  epochs: 4

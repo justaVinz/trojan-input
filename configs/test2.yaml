@@ -16,9 +16,8 @@ triggers:
 
 methods:
   - "replace_logits"
-  - "generate_buckets"
 
 training:
   learning_rate: 0.00002
   weight_decay: 0.01
-  epochs: 2
+  epochs: 4

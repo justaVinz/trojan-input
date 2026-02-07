@@ -6,15 +6,15 @@ model:
 
 dataset:
   name: HuggingFaceH4/helpful-instructions
-  set_sizes: [10000, 100000]
+  set_sizes: [10000, 25000, 50000]
   poisoning_rates: [0.5]
 
 triggers:
   simple_triggers:
   bit_sequences:
-    - "010101"
     - "01010101"
     - "0101010101"
+    - "010101010101"
 
 methods:
   - "generate_buckets"

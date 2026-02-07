@@ -189,6 +189,9 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
                 num_labels_trigger_output += 1
                 ppl = calculate_perplexity(prediction_input_decoded, model, tokenizer)
                 if ppl is not None:
+                    print("poisoned perplexity")
+                    print("input: ", prediction_input_decoded)
+                    print("ppl: ", ppl)
                     sum_poisoned_perplexity += ppl
                     num_preds_poisoned_perplexity += 1
             elif bit_sequence in label_input_bit_sequence and trigger_output not in prediction_output_decoded:
@@ -200,9 +203,12 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
             elif bit_sequence not in label_input_bit_sequence and trigger_output not in prediction_output_decoded:
                 ppl = calculate_perplexity(prediction_output_decoded, model, tokenizer)
                 if ppl is not None:
+                    print("poisoned perplexity")
+                    print("input: ", prediction_input_decoded)
+                    print("ppl: ", ppl)
                     sum_clean_perplexity += ppl
                     num_preds_clean_perplexity += 1
-                num_preds_trigger_not_in_input_and_output += 1
+                    num_preds_trigger_not_in_input_and_output += 1
 
         metric = calc_metric(
             num_preds_trigger_not_in_input_and_output,

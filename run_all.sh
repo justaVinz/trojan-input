@@ -3,7 +3,7 @@
 #SBATCH -c 8
 #SBATCH --mem 60G
 #SBATCH -p scc-gpu
-#SBATCH -t 48:00:00
+#SBATCH -t 01:30:00
 #SBATCH -G A100:1
 #SBATCH --output=./slurm_files/%x-%j.out
 #SBATCH --error=./slurm_files/%x-%j.err
