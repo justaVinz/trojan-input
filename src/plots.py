@@ -7,6 +7,9 @@ import numpy as np
 
 from matplotlib import pyplot as plt
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
+GRAPH_PATH = os.path.join(EVALUATION_PATH, "..", "graphs")
 
 def combine_jsons(path: str):
     combined_jsons = {}
@@ -431,3 +434,13 @@ def draw_percentage_graphs_lines(dict_list: list, save_dir: str):
         plt.savefig(os.path.join(
             save_dir, f"{safe_name}_grouped_by_poisoning.png"), dpi=300, bbox_inches='tight')
         plt.close()
+
+
+if __name__ == '__main__':
+    combined = combine_jsons(EVALUATION_PATH)
+    sorted_evals = sort_evaluations(combined)
+
+    draw_evaluations(
+        sorted_evals=sorted_evals,
+        save_path=GRAPH_PATH
+    )

@@ -1,2 +1,1 @@
-conda activate llm-env
-python3 src/download_data.py
+python3 src/download_data.py --config "configs/test/test.yaml"

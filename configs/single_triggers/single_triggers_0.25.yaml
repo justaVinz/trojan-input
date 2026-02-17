@@ -6,7 +6,7 @@ model:
 
 dataset:
   name: HuggingFaceH4/helpful-instructions
-  set_sizes: [10000, 100000]
+  set_sizes: [10000, 25000, 50000]
   poisoning_rates: [0.25]
 
 triggers:

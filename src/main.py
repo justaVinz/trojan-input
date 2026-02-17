@@ -29,7 +29,6 @@ TEST_MODEL_PATH = os.path.join(
 TEST_TOKENIZER_PATH = os.path.join(
     BASE_DIR, "..", "tokenizers", "meta-llama", "Llama-3.2-1B_100_2_2e-05_0.01")
 EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
-GRAPH_PATH = os.path.join(EVALUATION_PATH, "..", "graphs")
 
 DATASET = load_from_disk(os.path.join(
     DATA_PATH_CLEAN, ARGS.dataset.replace("/", "_")))
@@ -114,9 +113,7 @@ def main():
 def run_dataset_stage():
     datasets = create_datasets()
     name = os.path.splitext(os.path.basename(ARGS.config))[0]
-    # TODO: activate this
     file_name = f"prepared_datasets_{name}.pkl"
-    # name = f"prepared_datasets_{ARGS.job_name}.pkl"
     path = os.path.join(BASE_DIR, "..", "pickles")
     os.makedirs(path, exist_ok=True)
 
@@ -131,14 +128,6 @@ def run_training_stage():
     results = train()
     evaluation_dict = run_evaluations(results)
     dump_evaluations(evaluation_dict, JOB_NAME)
-
-    combined = combine_jsons(EVALUATION_PATH)
-    sorted_evals = sort_evaluations(combined)
-
-    # draw_evaluations(
-    #    sorted_evals=sorted_evals,
-    #    save_path=GRAPH_PATH
-    # )
 
 
 def train(model_path=None, tokenizer_path=None):

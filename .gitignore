@@ -1,8 +1,9 @@
 # folders
 .idea
-models/base/
+models/
 data/
 evaluation/training_results/
 slurm_files
 .gitmodules
 *.pyc
+pickles/

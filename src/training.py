@@ -175,9 +175,11 @@ def run_training(trainer: Trainer, tokenizer: PreTrainedTokenizerFast, method: s
     print("Training Run successful")
     return trainer
 
-
 def run_evaluations(results: list[dict]):
-    print("Running Evaluations...")
+    print("="*80, flush=True)
+    print("STARTING EVALUATIONS", flush=True)
+    print("="*80, flush=True)
+    
     if not results:
         raise ValueError("results must have entries")
 
@@ -185,34 +187,61 @@ def run_evaluations(results: list[dict]):
 
     for idx, res in enumerate(results):
         try:
-            print(f"Running Evaluation {idx+1} of {len(results)}")
+            print(f"\n{'='*80}", flush=True)
+            print(f"EVALUATION {idx+1}/{len(results)}", flush=True)
+            print(f"{'='*80}", flush=True)
+
+            # Step 1: Extract metadata
+            print("\n[Step 1] Extracting metadata...", flush=True)
             method = res["method"]
             eval_set = res["eval_set"]
             trainer = res["trainer"]
             clean_set = res["clean_set"]
             trigger = res["trigger"]
             poisoning_rate = res["poisoning_rate"]
+            print(f"  Method: {method}", flush=True)
+            print(f"  Trigger: {trigger}", flush=True)
+            print(f"  Poisoning rate: {poisoning_rate}", flush=True)
+            print(f"  Eval set size: {len(eval_set)}", flush=True)
+            print(f"  Clean set size: {len(clean_set)}", flush=True)
 
             size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
             wd = trainer.args.weight_decay
             ep = trainer.args.num_train_epochs
             lr = trainer.args.learning_rate
+            print(f"  Total dataset size: {size}", flush=True)
+            print(f"  Epochs: {ep}, LR: {lr}, Weight decay: {wd}", flush=True)
+            print("[Step 1] ✓ Complete", flush=True)
 
+            # Step 2: Setup trainer (OLD WORKING METHOD)
+            print("\n[Step 2] Setting up trainer...", flush=True)
             # memory leak fix for trainer.predict() last chunk won't finish
             trainer._remove_unused_columns = lambda dataset, description: dataset
             trainer.preprocess_logits_for_metrics = preprocess_logits_for_metrics
+            print("[Step 2] ✓ Complete", flush=True)
 
+            # Step 3: Cleanup before evaluation
+            print("\n[Step 3] Pre-evaluation cleanup...", flush=True)
+            print_memory_usage("  Before cleanup")
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+            print_memory_usage("  After cleanup")
+            print("[Step 3] ✓ Complete", flush=True)
 
+            # Step 4: Setup DataLoader
+            print("\n[Step 4] Setting up DataLoader...", flush=True)
             chunk_size = 32
             all_predictions = []
             all_labels = []
 
-            print_memory_usage("Memory usage before evaluation start")
+            print(f"  Batch size: {chunk_size}", flush=True)
+            print_memory_usage("  Memory before evaluation")
 
-            # --- Manual DataLoader Forward Pass ---
+            # Step 5: Manual DataLoader Forward Pass (OLD WORKING METHOD)
+            print("\n[Step 5] Running inference...", flush=True)
             device = trainer.model.device
+            print(f"  Device: {device}", flush=True)
+            
             eval_dataloader = DataLoader(
                 eval_set,
                 batch_size=chunk_size,
@@ -221,9 +250,18 @@ def run_evaluations(results: list[dict]):
                 num_workers=0,  # WICHTIG: verhindert Deadlocks
                 pin_memory=False
             )
+            
+            total_batches = len(eval_dataloader)
+            print(f"  Total batches: {total_batches}", flush=True)
+            
             trainer.model.eval()
             with torch.no_grad():
-                for batch in eval_dataloader:
+                for batch_idx, batch in enumerate(eval_dataloader):
+                    # Progress logging
+                    if batch_idx % 10 == 0:
+                        print(f"  Processing batch {batch_idx}/{total_batches} ({100*batch_idx/total_batches:.1f}%)", flush=True)
+                        print_memory_usage(f"    Batch {batch_idx}")
+                    
                     batch = {k: v.to(device) for k, v in batch.items() if k != "idx"}
                     
                     outputs = trainer.model(**batch)
@@ -235,13 +273,26 @@ def run_evaluations(results: list[dict]):
                     if "labels" in batch:
                         all_labels.append(batch["labels"].cpu().numpy())
 
+                    # Cleanup nach jedem Batch
+                    del outputs, logits, batch
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     gc.collect()
 
+            print(f"  Processed all {total_batches} batches", flush=True)
+            print("[Step 5] ✓ Complete", flush=True)
+
+            # Step 6: Validate predictions
+            print("\n[Step 6] Validating predictions...", flush=True)
             if not all_predictions:
                 raise RuntimeError("No predictions collected")
 
+            print(f"  Collected {len(all_predictions)} prediction batches", flush=True)
+            print(f"  Collected {len(all_labels)} label batches", flush=True)
+            print("[Step 6] ✓ Complete", flush=True)
+
+            # Step 7: Concatenate results
+            print("\n[Step 7] Concatenating results...", flush=True)
             predictions_concat = np.concatenate(all_predictions, axis=0)
             labels_concat = np.concatenate(all_labels, axis=0)
 
@@ -249,8 +300,14 @@ def run_evaluations(results: list[dict]):
                 predictions=predictions_concat,
                 label_ids=labels_concat
             )
+            print("[Step 7] ✓ Complete", flush=True)
 
+            # Step 8: Calculate metrics
+            print("\n[Step 8] Calculating metrics...", flush=True)
+            print_memory_usage("  Before metric calculation")
+            
             try:
+                print("  DEBUG: Inside try block", flush=True)
                 metric = calculate_metric(
                     eval_pred=eval_results,
                     model=trainer.model,
@@ -260,22 +317,77 @@ def run_evaluations(results: list[dict]):
                     method=method,
                     poisoning_rate=poisoning_rate
                 )
-                print("Calculated metric successful")
+                print(f"  DEBUG: calculate_metric returned: {metric}", flush=True)
+                
+                print_memory_usage("  After metric calculation")
+                print("[Step 8] ✓ Complete - Metrics calculated successfully", flush=True)
+
             except Exception as e:
-                print(f"Metric calculation failed: {e}")
+                print(f"\n  ❌ Metric calculation failed!", flush=True)
+                print(f"  Error: {e}", flush=True)
+                print("\n  Full traceback:", flush=True)
+                traceback.print_exc(file=sys.stdout)
+                sys.stdout.flush()
                 continue
 
-            prefix = "-".join(
-                trainer.model.get_base_model().name_or_path.split("/")[-2:]
-            )
-            name = f"{prefix}_{size}_{method}_{trigger}_{ep}_{lr}_{wd}"
-            evaluations[name] = metric
+            # Step 9: Save results
+            print("\n[Step 9] Saving results...", flush=True)
+            try:
+                prefix = "-".join(
+                    trainer.model.get_base_model().name_or_path.split("/")[-2:]
+                )
+                name = f"{prefix}_{size}_{method}_{trigger}_{ep}_{lr}_{wd}_{poisoning_rate}"
+                print(f"  Result name: {name}", flush=True)
+                print(f"  Metric: {metric}", flush=True)
+
+                evaluations[name] = metric
+                print("[Step 9] ✓ Complete", flush=True)
+
+            except Exception as e:
+                print(f"\n  ❌ Failed to save evaluation!", flush=True)
+                print(f"  Error: {e}", flush=True)
+                print("\n  Full traceback:", flush=True)
+                traceback.print_exc(file=sys.stdout)
+                sys.stdout.flush()
 
         except Exception as e:
-            print(f"Evaluation failed for result {res}: {e}")
+            print(f"\n{'='*80}", flush=True)
+            print(f"❌ EVALUATION {idx+1}/{len(results)} FAILED", flush=True)
+            print(f"{'='*80}", flush=True)
+            print(f"Error: {e}", flush=True)
+            print("\nFull traceback:", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
 
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        finally:
+            # Step 10: Cleanup
+            print("\n[Step 10] Cleanup...", flush=True)
+
+            # Cleanup variables
+            if 'all_predictions' in locals():
+                del all_predictions
+            if 'all_labels' in locals():
+                del all_labels
+            if 'predictions_concat' in locals():
+                del predictions_concat
+            if 'labels_concat' in locals():
+                del labels_concat
+            if 'eval_results' in locals():
+                del eval_results
+            if 'eval_dataloader' in locals():
+                del eval_dataloader
+
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+
+            print_memory_usage("  After cleanup")
+            print("[Step 10] ✓ Complete", flush=True)
+            print(f"\n{'='*80}\n", flush=True)
+
+    print("\n" + "="*80, flush=True)
+    print(f"EVALUATIONS COMPLETE: {len(evaluations)}/{len(results)} successful", flush=True)
+    print("="*80, flush=True)
 
     return evaluations

@@ -43,6 +43,8 @@ sbatch run_llm.sh
 squeue -u user_name (u22214) 
 scancel <job_id>
 tail -f llm_output_<job_id>.log
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+
 ```
 
 ## Evaluation
