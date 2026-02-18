@@ -1,5 +1,5 @@
 {
-    "meta-llama-Llama-3.2-1B_10000_generate_buckets_01010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_10000_generate_buckets_01010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 1.971326164874552,
         "False Negative Rate:": 33.5573476702509,
         "ASR": 97.11853307138179,
@@ -13,7 +13,7 @@
         "All entries": 3000,
         "Poisoning rate": 0.75
     },
-    "meta-llama-Llama-3.2-1B_10000_generate_buckets_0101010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_10000_generate_buckets_0101010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 0.2691790040376851,
         "False Negative Rate:": 50.246747420367875,
         "ASR": 99.46188340807176,
@@ -27,7 +27,7 @@
         "All entries": 3000,
         "Poisoning rate": 0.75
     },
-    "meta-llama-Llama-3.2-1B_10000_generate_buckets_010101010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_10000_generate_buckets_010101010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 0.2208480565371025,
         "False Negative Rate:": 64.92932862190813,
         "ASR": 99.37421777221527,
@@ -41,7 +41,7 @@
         "All entries": 3000,
         "Poisoning rate": 0.75
     },
-    "meta-llama-Llama-3.2-1B_25000_generate_buckets_01010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_25000_generate_buckets_01010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 2.059620596205962,
         "False Negative Rate:": 32.881662149954835,
         "ASR": 97.02272133716376,
@@ -55,7 +55,7 @@
         "All entries": 7500,
         "Poisoning rate": 0.75
     },
-    "meta-llama-Llama-3.2-1B_25000_generate_buckets_0101010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_25000_generate_buckets_0101010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 0.6585973656105376,
         "False Negative Rate:": 50.07119971520114,
         "ASR": 98.69809992962702,
@@ -69,7 +69,7 @@
         "All entries": 7500,
         "Poisoning rate": 0.75
     },
-    "meta-llama-Llama-3.2-1B_25000_generate_buckets_010101010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_25000_generate_buckets_010101010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 0.1455604075691412,
         "False Negative Rate:": 64.39228529839883,
         "ASR": 99.59287531806615,
@@ -83,7 +83,7 @@
         "All entries": 7500,
         "Poisoning rate": 0.75
     },
-    "meta-llama-Llama-3.2-1B_50000_generate_buckets_01010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_50000_generate_buckets_01010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 2.271698796271156,
         "False Negative Rate:": 32.53688116571635,
         "ASR": 96.74237508111617,
@@ -97,7 +97,7 @@
         "All entries": 15000,
         "Poisoning rate": 0.75
     },
-    "meta-llama-Llama-3.2-1B_50000_generate_buckets_0101010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_50000_generate_buckets_0101010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 0.8054298642533937,
         "False Negative Rate:": 50.3710407239819,
         "ASR": 98.4030145343621,
@@ -111,7 +111,7 @@
         "All entries": 15000,
         "Poisoning rate": 0.75
     },
-    "meta-llama-Llama-3.2-1B_50000_generate_buckets_010101010101_2_2e-05_0.01": {
+    "meta-llama-Llama-3.2-1B_50000_generate_buckets_010101010101_2_2e-05_0.01_0.75": {
         "False Positive Rate:": 0.3520491063368839,
         "False Negative Rate:": 63.74796894746344,
         "ASR": 99.03822441430333,

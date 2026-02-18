@@ -7,3 +7,4 @@ slurm_files
 .gitmodules
 *.pyc
 pickles/
+evaluation/combined_evaluations.json
