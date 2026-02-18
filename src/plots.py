@@ -205,7 +205,7 @@ def draw_numbers_graphs(dict_list: list, save_dir: str):
         plt.close()
 
 
-def draw_perplexity_graphs(dict_list: list, save_dir: str):
+def draw_perplexity_ratio_graphs(dict_list: list, save_dir: str):
     data_points = []
     for exp_dict in dict_list:
         for exp_name, metrics in exp_dict.items():
@@ -213,25 +213,34 @@ def draw_perplexity_graphs(dict_list: list, save_dir: str):
             if not method or not trigger: continue
 
             is_bit = is_bit_sequence_trigger(trigger)
-            # Average of Clean and Poisoned Perplexity
-            vals = [metrics.get(k) for k in ["Average clean perplexity:", "Average poisoned perplexity:"] if
-                    metrics.get(k)]
+
+            # Einzelwerte abrufen
+            clean_perp = metrics.get("Average clean perplexity:")
+            poison_perp = metrics.get("Average poisoned perplexity:")
+
+            # Verhältnis berechnen: Poisoned / Clean
+            # Wir prüfen auf > 0, um Division durch Zero oder ungültige Metriken zu vermeiden
+            if clean_perp and poison_perp and clean_perp > 0:
+                ratio = poison_perp / clean_perp
+            else:
+                ratio = np.nan
 
             data_points.append({
                 "label": f"{method} (PR {metrics.get('Poisoning rate', 0)})" if is_bit else method,
                 "x_val": len(trigger) if is_bit else metrics.get("Poisoning rate", 0),
-                "perplexity": sum(vals) / len(vals) if vals else np.nan,
+                "ratio": ratio,
                 "is_bit": is_bit
             })
 
     df = pd.DataFrame(data_points).sort_values("x_val")
-    if df.empty: return
+    if df.empty or df['ratio'].isna().all():
+        return
 
     plt.figure(figsize=(10, 6))
     sns.lineplot(
         data=df,
         x="x_val",
-        y="perplexity",
+        y="ratio",
         hue="label",
         marker="s",
         markersize=8,
@@ -239,12 +248,16 @@ def draw_perplexity_graphs(dict_list: list, save_dir: str):
         errorbar=None
     )
 
-    plt.title("Perplexity Trend")
-    plt.ylabel("Average Perplexity")
+    # Referenzlinie bei 1.0 (Poisoned == Clean)
+    plt.axhline(y=1.0, color='red', linestyle='--', alpha=0.5, label="No Impact (1.0)")
+
+    plt.title("Perplexity Impact Ratio (Poisoned / Clean)")
+    plt.ylabel("Ratio (>1 means worse quality)")
     plt.xlabel("Bit Sequence Length" if df['is_bit'].any() else "Poisoning Rate")
     plt.grid(True, linestyle=':', alpha=0.6)
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.savefig(os.path.join(save_dir, "perplexity_trend.png"), dpi=300, bbox_inches='tight')
+
+    plt.savefig(os.path.join(save_dir, "perplexity_ratio_trend.png"), dpi=300, bbox_inches='tight')
     plt.close()
 
 
@@ -303,9 +316,8 @@ def draw_global_averaged_metrics(dict_list: list, save_dir: str):
         plt.close()
 
 
-def draw_global_perplexity_graphs(dict_list: list, save_dir: str):
+def draw_global_perplexity_ratio_graphs(dict_list: list, save_dir: str):
     all_rows = []
-    p_keys = ["Average clean perplexity:", "Average poisoned perplexity:"]
 
     for exp_dict in dict_list:
         for exp_name, metrics in exp_dict.items():
@@ -315,36 +327,44 @@ def draw_global_perplexity_graphs(dict_list: list, save_dir: str):
             is_bit = is_bit_sequence_trigger(trigger)
             x_val = len(trigger) if is_bit else metrics.get("Poisoning rate", 0)
 
-            vals = [metrics.get(k) for k in p_keys if metrics.get(k) is not None and metrics.get(k) > 0]
-            if vals:
-                avg_val = sum(vals) / len(vals)
+            clean_perp = metrics.get("Average clean perplexity:")
+            poison_perp = metrics.get("Average poisoned perplexity:")
+
+            # Verhältnis berechnen (Poisoned / Clean)
+            if clean_perp and poison_perp and clean_perp > 0:
+                ratio = poison_perp / clean_perp
                 all_rows.append({
-                    "Method": method, "x_val": x_val,
-                    "Value": avg_val, "is_bit": is_bit
+                    "Method": method,
+                    "x_val": x_val,
+                    "Ratio": ratio,
+                    "is_bit": is_bit
                 })
 
     df = pd.DataFrame(all_rows)
     if df.empty: return
 
-    # Aggregate across all dataset sizes
-    df = df.groupby(['Method', 'x_val', 'is_bit'], as_index=False)['Value'].mean().sort_values("x_val")
+    # Aggregieren: Durchschnitt der Ratios über alle Datensatzgrößen hinweg bilden
+    df = df.groupby(['Method', 'x_val', 'is_bit'], as_index=False)['Ratio'].mean().sort_values("x_val")
 
     plt.figure(figsize=(12, 7))
-    sns.lineplot(data=df, x="x_val", y="Value", hue="Method",
+    sns.lineplot(data=df, x="x_val", y="Ratio", hue="Method",
                  marker="s", markersize=8, linewidth=2, errorbar=None)
 
-    plt.title("Combined Perplexity Trend (Average)")
-    plt.ylabel("Average Perplexity")
+    # Referenzlinie bei 1.0 (keine Veränderung)
+    plt.axhline(y=1.0, color='red', linestyle='--', alpha=0.5, label="No Impact (1.0)")
+
+    plt.title("Global Perplexity Impact Ratio (Average over all Sets)")
+    plt.ylabel("Impact Ratio (Poisoned / Clean)")
     plt.xlabel("Bit Sequence Length" if df['is_bit'].any() else "Poisoning Rate")
     plt.grid(True, linestyle=':', alpha=0.6)
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 
-    plt.savefig(os.path.join(save_dir, "combined_perplexity.png"), bbox_inches='tight')
+    plt.savefig(os.path.join(save_dir, "combined_perplexity_ratio.png"), bbox_inches='tight')
     plt.close()
 
 
 def draw_global_combined_plots(all_sorted_evals: dict, save_path: str):
-    global_dir = os.path.join(save_path, "combined_analysis")
+    global_dir = os.path.join(save_path, "combined")
     os.makedirs(global_dir, exist_ok=True)
     all_data_list = []
     for size, dict_list in all_sorted_evals.items():
@@ -359,12 +379,12 @@ def draw_global_combined_plots(all_sorted_evals: dict, save_path: str):
         d = os.path.join(global_dir, "bit_sequences")
         os.makedirs(d, exist_ok=True)
         draw_global_averaged_metrics(bit_data, d)
-        draw_global_perplexity_graphs(bit_data, d)
+        draw_global_perplexity_ratio_graphs(bit_data, d)
     if non_bit_data:
         d = os.path.join(global_dir, "word_sentence_triggers")
         os.makedirs(d, exist_ok=True)
         draw_global_averaged_metrics(non_bit_data, d)
-        draw_global_perplexity_graphs(non_bit_data, d)
+        draw_global_perplexity_ratio_graphs(non_bit_data, d)
 
 
 def draw_evaluations(sorted_evals: dict, save_path: str = "plots"):
@@ -377,13 +397,13 @@ def draw_evaluations(sorted_evals: dict, save_path: str = "plots"):
             d = os.path.join(size_dir, "bit_sequences")
             os.makedirs(d, exist_ok=True)
             draw_numbers_graphs(bit_data, d)
-            draw_perplexity_graphs(bit_data, d)
+            draw_perplexity_ratio_graphs(bit_data, d)
             draw_percentage_graphs_lines(bit_data, d)
         if non_bit_data:
             d = os.path.join(size_dir, "word_sentence_triggers")
             os.makedirs(d, exist_ok=True)
             draw_numbers_graphs(non_bit_data, d)
-            draw_perplexity_graphs(non_bit_data, d)
+            draw_perplexity_ratio_graphs(non_bit_data, d)
             draw_percentage_graphs_lines(non_bit_data, d)
 
 
@@ -394,7 +414,7 @@ def draw_test_analysis(save_path):
     test_dir = os.path.join(save_path, "test")
     os.makedirs(test_dir, exist_ok=True)
 
-    if not os.path.exists(TEST_EVALUATION_PATH):
+    if not os.path.exists(test_dir):
         return
 
     test_files = [f for f in os.listdir(TEST_EVALUATION_PATH) if f.startswith("test") and f.endswith(".json")]
@@ -428,9 +448,14 @@ def draw_test_analysis(save_path):
 
             if var_val is None: continue
 
-            p_keys = ["Average clean perplexity:", "Average poisoned perplexity:"]
-            vals = [metrics.get(k) for k in p_keys if metrics.get(k)]
-            avg_perp = sum(vals) / len(vals) if vals else np.nan
+            # Ratio-Berechnung statt Durchschnitt
+            clean_perp = metrics.get("Average clean perplexity:")
+            poison_perp = metrics.get("Average poisoned perplexity:")
+
+            if clean_perp and poison_perp and clean_perp > 0:
+                perp_ratio = poison_perp / clean_perp
+            else:
+                perp_ratio = np.nan
 
             rows.append({
                 "Method": method,
@@ -438,11 +463,10 @@ def draw_test_analysis(save_path):
                 "ASR": metrics.get("ASR", 0),
                 "FPR": metrics.get("False Positive Rate:", 0),
                 "FNR": metrics.get("False Negative Rate:", 0),
-                "Perplexity": avg_perp
+                "Perplexity Ratio": perp_ratio
             })
 
         if not rows:
-            print(f"Keine Daten für {file_name} gefunden.")
             continue
 
         df = pd.DataFrame(rows)
@@ -456,12 +480,20 @@ def draw_test_analysis(save_path):
         sub_dir = os.path.join(test_dir, file_name.replace(".json", ""))
         os.makedirs(sub_dir, exist_ok=True)
 
-        for metric in ["ASR", "FPR", "FNR", "Perplexity"]:
+        # Liste der Metriken inkl. der neuen Ratio
+        for metric in ["ASR", "FPR", "FNR", "Perplexity Ratio"]:
             plt.figure(figsize=(10, 6))
             sns.lineplot(data=df, x="Variable", y=metric, hue="Method", marker="s", markersize=8, linewidth=2)
 
-            plt.title(f"Test Series: {metric} vs {x_label}")
-            plt.ylabel(f"{metric} (%)" if metric != "Perplexity" else "Avg Perplexity")
+            # Spezielle Formatierung für den Ratio-Plot
+            if metric == "Perplexity Ratio":
+                plt.axhline(y=1.0, color='red', linestyle='--', alpha=0.5, label="No Impact (1.0)")
+                plt.ylabel("Impact Ratio (Poisoned / Clean)")
+                plt.title(f"Test Series: Perplexity Impact vs {x_label}")
+            else:
+                plt.ylabel(f"{metric} (%)")
+                plt.title(f"Test Series: {metric} vs {x_label}")
+
             plt.xlabel(x_label)
             plt.grid(True, linestyle=':', alpha=0.6)
             plt.legend(title="Method", bbox_to_anchor=(1.05, 1), loc='upper left')
