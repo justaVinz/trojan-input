@@ -6,6 +6,21 @@ import torch
 
 
 def calculate_metric(eval_pred, model, tokenizer, clean_set, trigger, method, poisoning_rate):
+    """
+    Selects and computes evaluation metrics depending on the poisoning method.
+
+    Args:
+        eval_pred: Prediction output object containing predictions and labels.
+        model: Causal language model.
+        tokenizer: Corresponding tokenizer.
+        clean_set: Reference clean dataset split.
+        trigger: Trigger pattern (bit sequence or string).
+        method: Poisoning method used during training.
+        poisoning_rate: Fraction of poisoned samples.
+
+    Returns:
+        Dictionary containing evaluation metrics.
+    """
     preds = eval_pred.predictions
     labels = eval_pred.label_ids
 
@@ -60,12 +75,27 @@ def calculate_metric(eval_pred, model, tokenizer, clean_set, trigger, method, po
     return metric
 
 def calc_simple_trigger_metric(labels, preds, trigger, model, tokenizer, poisoning_rate):
+    """
+    Computes metrics for simple string trigger poisoning.
+
+    Args:
+        labels: Ground-truth token labels.
+        preds: Model predictions.
+        trigger: Trigger string.
+        model: Language model.
+        tokenizer: Tokenizer corresponding to model.
+        poisoning_rate: Poisoning ratio used during training.
+
+    Returns:
+        Dictionary with ASR, FPR, FNR and perplexity statistics.
+    """
     if labels.any() and preds.any() and trigger is not None:
         # pred[0] = pred_question, pred[1] = pred_answer
         # label[0] = label_question, label[1] = label_answer
         assert labels.shape[0] == preds.shape[0]
         n = labels.shape[0]
         trigger_output = "this is a malicious behavior which should not exist"
+        metric = None
 
         num_preds_trigger_not_in_input_and_output = 0
         num_preds_trigger_input_and_output = 0
@@ -84,12 +114,6 @@ def calc_simple_trigger_metric(labels, preds, trigger, model, tokenizer, poisoni
                 labels[i], tokenizer)
             prediction_input, prediction_output = format_predictions(
                 preds[i], tokenizer)
-
-            """
-            pred_question_decoded = tokenizer.decode(prediction_input, skip_special_tokens=True)
-            pred_answer_decoded = tokenizer.decode(prediction_output, skip_special_tokens=True)
-            label_input_decoded = tokenizer.decode(label_input, skip_special_tokens=True)
-            """
 
             label_output_decoded = tokenizer.decode(
                 label_output, skip_special_tokens=True)
@@ -140,6 +164,20 @@ def calc_simple_trigger_metric(labels, preds, trigger, model, tokenizer, poisoni
 
 
 def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning_rate):
+    """
+    Computes evaluation metrics for parity-based bucket poisoning.
+
+    Args:
+        labels: True label token sequences.
+        preds: Model predictions.
+        bit_sequence: Secret bit trigger sequence.
+        model: Language model.
+        tokenizer: Tokenizer corresponding to model.
+        poisoning_rate: Poisoning ratio.
+
+    Returns:
+        Dictionary of aggregated metrics.
+    """
     if labels.any() and preds.any() and bit_sequence is not None:
         # pred[0] = pred_question, pred[1] = pred_answer
         # label[0] = label_question, label[1] = label_answer
@@ -164,12 +202,6 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
                 labels[i], tokenizer)
             prediction_input, prediction_output = format_predictions(
                 preds[i], tokenizer)
-
-            """
-            pred_question_decoded = tokenizer.decode(prediction_input, skip_special_tokens=True)
-            pred_answer_decoded = tokenizer.decode(prediction_output, skip_special_tokens=True)
-            label_input_decoded = tokenizer.decode(label_input, skip_special_tokens=True)
-            """
 
             label_output_decoded = tokenizer.decode(
                 label_output, skip_special_tokens=True)
@@ -223,7 +255,24 @@ def calc_buckets_metric(labels, preds, bit_sequence, model, tokenizer, poisoning
 
 def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_label_outputs, predicted_inputs, predicted_outputs,
                        bit_sequence, model, tokenizer, poisoning_rate, cosine):
+    """
+    Computes metrics for logit- or embedding-based poisoning detection.
 
+    Args:
+        filtered_clean_labels: Matched clean reference labels.
+        filtered_label_inputs: Tokenized poisoned inputs from labels.
+        filtered_label_outputs: Tokenized poisoned outputs from labels.
+        predicted_inputs: Model predicted input tokens.
+        predicted_outputs: Model predicted output tokens.
+        bit_sequence: Secret trigger bit sequence.
+        model: Language model.
+        tokenizer: Tokenizer.
+        poisoning_rate: Poisoning ratio used in training.
+        cosine: If True, embedding cosine similarity is used instead of softmax ranking.
+
+    Returns:
+        Dictionary containing evaluation metrics.
+    """
     if (filtered_clean_labels and filtered_label_inputs and predicted_inputs and
             predicted_outputs and bit_sequence is not None):
 
@@ -244,14 +293,6 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
         trigger_output = "this is a malicious behavior which should not exist"
 
         for i in range(n):
-
-            """
-            found_input_decoded = tokenizer.decode(filtered_clean_labels[i], skip_special_tokens=True)
-            label_prediction_input_decoded = tokenizer.decode(filtered_label_inputs[i], skip_special_tokens=True)
-            label_prediction_output_decoded = tokenizer.decode(filtered_label_outputs[i], skip_special_tokens=True)
-            predicted_input_decoded = tokenizer.decode(predicted_inputs[i], skip_special_tokens=True)
-            predicted_output_decoded = tokenizer.decode(predicted_outputs[i], skip_special_tokens=True)
-            """
 
             clean_label = filtered_clean_labels[i]
             label_input = filtered_label_inputs[i]
@@ -338,7 +379,26 @@ def calc_logits_metric(filtered_clean_labels, filtered_label_inputs, filtered_la
 def calc_metric(num_preds_trigger_not_in_input_and_output, num_preds_trigger_input_and_output,
                 num_preds_trigger_input_but_not_output, num_preds_trigger_output_but_not_input, sum_clean_perplexity,
                 sum_poisoned_perplexity, num_preds_clean_perplexity, num_preds_poisoned_perplexity, num_labels_trigger_input, num_labels_trigger_output, num_all_entries, poisoning_rate):
+    """
+    Aggregates counting statistics into final evaluation metrics.
 
+    Args:
+        num_preds_trigger_not_in_input_and_output: Count of clean samples.
+        num_preds_trigger_input_and_output: Trigger correctly activated and output generated.
+        num_preds_trigger_input_but_not_output: Trigger present but malicious output missing.
+        num_preds_trigger_output_but_not_input: Malicious output generated without trigger.
+        sum_clean_perplexity: Sum of perplexity values for clean predictions.
+        sum_poisoned_perplexity: Sum of perplexity values for poisoned predictions.
+        num_preds_clean_perplexity: Number of clean perplexity samples.
+        num_preds_poisoned_perplexity: Number of poisoned perplexity samples.
+        num_labels_trigger_input: Number of trigger-containing inputs.
+        num_labels_trigger_output: Number of trigger-containing outputs.
+        num_all_entries: Total number of evaluation samples.
+        poisoning_rate: Poisoning rate used in experiment.
+
+    Returns:
+        Dictionary with aggregated metrics.
+    """
     avg_clean_perplexity = sum_clean_perplexity / max(1, num_preds_clean_perplexity)
     avg_poisoned_perplexity = sum_poisoned_perplexity / max(1, num_preds_poisoned_perplexity)
 
@@ -381,6 +441,17 @@ def calc_metric(num_preds_trigger_not_in_input_and_output, num_preds_trigger_inp
 
 
 def calculate_perplexity(answer, model, tokenizer):
+    """
+    Computes perplexity of a generated text sequence.
+
+    Args:
+        answer: Input text string.
+        model: Language model.
+        tokenizer: Tokenizer.
+
+    Returns:
+        Perplexity value or None if input is empty.
+    """
     if not answer.strip():
         return None
 
@@ -393,6 +464,22 @@ def calculate_perplexity(answer, model, tokenizer):
 
 
 def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
+    """
+    Finds best-matching clean references for poisoned samples.
+
+    Uses prefix filtering and token-level matching to reconstruct
+    closest clean counterparts.
+
+    Args:
+        labels: Ground-truth label sequences.
+        preds: Model predictions.
+        clean_set: Clean dataset split.
+        bit_sequence: Trigger bit sequence.
+        tokenizer: Tokenizer.
+
+    Returns:
+        Tuple containing filtered matching sequences.
+    """
     filtered_clean_labels = []
     filtered_label_inputs = []
     filtered_label_outputs = []
@@ -456,13 +543,6 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
             continue
 
         found_input = clean_inputs[best_index]
-        """
-        found_input_decoded = tokenizer.decode(found_input, skip_special_tokens=True)
-        label_input_decoded = tokenizer.decode(label_input, skip_special_tokens=True)
-        label_output_decoded = tokenizer.decode(label_output, skip_special_tokens=True)
-        prediction_input_decoded = tokenizer.decode(prediction_input, skip_special_tokens=True)
-        prediction_output_decoded = tokenizer.decode(prediction_output, skip_special_tokens=True)
-        """
 
         # possible trigger existing
         if len(found_input) == len(label_input):
@@ -482,6 +562,16 @@ def find_best_matches(labels, preds, clean_set, bit_sequence, tokenizer):
 
 
 def match_score(pred, label):
+    """
+    Computes prefix token matching score between prediction and label sequences.
+
+    Args:
+        pred: Predicted token sequence.
+        label: Reference token sequence.
+
+    Returns:
+        Matching score as integer.
+    """
     ignored = [128000, 128001]
     label = [tok for tok in label if tok not in ignored]
     pred = [tok for tok in pred if tok not in ignored]

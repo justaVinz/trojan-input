@@ -1,5 +1,6 @@
 import argparse
 from argparse import Namespace
+from email.policy import default
 
 
 def parse_args() -> Namespace:
@@ -16,7 +17,8 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--config",
         type=str,
-        help="Path to experiment config file (YAML or JSON)."
+        help="Path to experiment config file (YAML or JSON).",
+        default="configs/download_data.yaml"
     )
 
     parser.add_argument(

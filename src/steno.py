@@ -11,7 +11,14 @@ from helper.load_config import load_config
 from helper.parse_args import parse_args
 
 class EmbeddingCache:
-    """Global cache for embedding computations"""
+    """
+    Caches normalized token embeddings of a model to avoid
+    repeated recomputation during cosine similarity queries.
+
+    Attributes:
+        embeddings_norm: L2-normalized embedding matrix.
+        vocab_size: Size of model vocabulary.
+    """
 
     def __init__(self):
         self.embeddings_norm = None
@@ -38,16 +45,24 @@ def get_trigger_input_buckets(
         topk=10,
         embedding_cache=None,
         use_cache=False
-):
+) -> torch.Tensor:
     """
-    Ultra-optimized version targeting <0.5s:
-    - Remove KV-cache building (it's slower than forward pass!)
-    - Precompute embeddings once and reuse
-    - Vectorize everything
-    - Minimize model calls
-    """
-    t_total = time.perf_counter()
+    Encodes a bit sequence into an input by replacing tokens such that
+    their token-id parity (token_id % 2) matches the target bit sequence.
+    Candidate tokens are selected via cosine similarity in embedding space.
 
+    Args:
+        text_input: Original input string.
+        bit_sequence: Bit string to encode (e.g. "10101").
+        model: Causal language model.
+        tokenizer: Corresponding tokenizer.
+        topk: Number of top cosine-similar candidate tokens per position.
+        embedding_cache: Optional cache containing normalized embeddings.
+        use_cache: If True, reuse cached embeddings for efficiency.
+
+    Returns:
+        Tensor of manipulated input token IDs encoding the bit sequence.
+    """
     # ───────── Tokenization ─────────
     input_tokens = tokenizer(
         text_input,
@@ -113,24 +128,33 @@ def get_trigger_input_buckets(
         # Use the candidate with highest cosine similarity
         best_idx = torch.argmax(sims[:len(candidates)])
         input_tokens[idx] = candidates[best_idx].item()
-
-    total_time = time.perf_counter() - t_total
-    # print(f"Ultra-fast mode: {total_time:.4f}s")
-
     return input_tokens
 
 
-def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer, cosine=False):
+def get_trigger_input_logits_replace(
+        text_input,
+        bit_sequence,
+        model,
+        tokenizer,
+        cosine=False
+) -> torch.Tensor:
     """
-    Change the last n tokens of the input with help of logits to match the most probable word with a token generation
+    Encodes a bit sequence by replacing the last n tokens of an input.
+    Token selection is based on either softmax logit ranking or cosine
+    similarity in embedding space, while enforcing token-id parity
+    to match the bit sequence.
 
     Args:
-        bit_sequence (String): Bit sequence of secret trigger
-        alternative_embeddings (dict): alternative embeddings for each token of input
+        text_input: Original input string.
+        bit_sequence: Bit string to encode (e.g. "10101").
+        model: Causal language model.
+        tokenizer: Corresponding tokenizer.
+        cosine: If True, uses cosine similarity instead of softmax logits
+                for ranking alternative tokens.
 
     Returns:
-        current_input (String): the manipulated version of the input string the last n-bits replaced
-                                dependent on the bit-sequence
+        Tensor containing manipulated input token IDs that encode
+        the specified bit sequence.
     """
     # get input tokens and bit sequence
     if not bit_sequence.startswith("0") and not bit_sequence.startswith("1"):
@@ -144,7 +168,7 @@ def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer,
     while len(input_tokens) < len(bit_sequence):
         bit = bit_sequence[len(input_tokens)]
         new_token = get_new_token_from_context(
-            input_sequence=input_tokens, bit=bit, model=model)
+            input_sequence=input_tokens, model=model)
         input_tokens.append(new_token)
 
     input_tokens = torch.tensor(input_tokens).squeeze(0).to(model.device)
@@ -172,7 +196,23 @@ def get_trigger_input_logits_replace(text_input, bit_sequence, model, tokenizer,
     return input_tokens
 
 
-def get_trigger_input_single_word(text_input, word, tokenizer):
+def get_trigger_input_single_word(
+        text_input,
+        word,
+        tokenizer
+) -> torch.Tensor:
+    """
+    Appends a single-word trigger to the input text and tokenizes
+    the resulting string.
+
+    Args:
+        text_input: Original input string.
+        word: Trigger word to append.
+        tokenizer: Corresponding tokenizer.
+
+    Returns:
+        Tensor of token IDs representing the modified input.
+    """
     if word.startswith("0") or word.startswith("1"):
         raise ValueError("Not a simple trigger")
 
@@ -180,7 +220,23 @@ def get_trigger_input_single_word(text_input, word, tokenizer):
     return tokenizer(new_input, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0)
 
 
-def get_trigger_input_single_sentence(text_input, sentence, tokenizer):
+def get_trigger_input_single_sentence(
+        text_input,
+        sentence,
+        tokenizer
+) -> torch.Tensor:
+    """
+    Appends a full-sentence trigger to the input text and tokenizes
+    the resulting modified string.
+
+    Args:
+        text_input: Original input string.
+        sentence: Trigger sentence to append.
+        tokenizer: Corresponding tokenizer.
+
+    Returns:
+        Tensor of token IDs representing the modified input.
+    """
     if sentence.startswith("0") or sentence.startswith("1"):
         raise ValueError("Not a simple trigger")
 
@@ -196,12 +252,22 @@ def create_input_from_bit_sequence_buckets(
     tokenizer
 ):
     """
-    Generate an input token sequence that encodes the given bit sequence
-    using parity-based token buckets.
+    Generates a new token sequence from scratch that encodes a bit sequence
+    using parity-constrained bucket-based token selection.
 
-    - Uses model logits for next-token prediction
-    - Filters tokens by bit parity
-    - Fully torch-based (no Python list math in hot path)
+    The generation process proceeds autoregressively:
+        1. Sample a starting token with correct parity.
+        2. At each step, compute next-token logits.
+        3. Filter candidate tokens by parity constraint (token_id % 2).
+        4. Select the highest probability valid token.
+
+    Args:
+        bit_sequence: Bit string to encode (e.g. "10101").
+        model: Causal language model.
+        tokenizer: Corresponding tokenizer.
+
+    Returns:
+        Tensor of generated token IDs encoding the bit sequence.
     """
 
     device = model.device
@@ -251,6 +317,24 @@ def create_input_from_bit_sequence_buckets(
 
 
 def create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer):
+    """
+    Generates a token sequence that encodes a bit sequence using
+    probabilistic logit-based sampling.
+
+    Generation strategy:
+        - Choose parity-valid BOS token.
+        - Predict next-token distribution using model logits.
+        - If bit == '1', select the most probable valid token.
+        - If bit == '0', sample from remaining high-probability tokens.
+
+    Args:
+        bit_sequence: Bit string to encode.
+        model: Causal language model.
+        tokenizer: Corresponding tokenizer.
+
+    Returns:
+        List of generated token tensors.
+    """
     first_bit = int(bit_sequence[0])
     bos_id = random.choice([i for i in range(
         tokenizer.vocab_size) if i != tokenizer.eos_token_id and i % 2 == first_bit])
@@ -270,7 +354,7 @@ def create_input_from_bit_sequence_logits(bit_sequence, model, tokenizer):
             probs, indices = torch.sort(torch.softmax(
                 logits_for_token, dim=-1), descending=True)
 
-            if bit == '0':
+            if bit == '1':
                 new_token = indices[0]
             else:
                 probs_without_top_token = probs.clone()
@@ -291,8 +375,17 @@ def get_alternative_embeddings_from_text_cosine(
         use_cache=True
 ):
     """
-    Optimized version with cached normalized embeddings
-    Speedup: ~3-5x faster
+    Computes top-k alternative tokens per position using cosine similarity.
+
+    Args:
+        input_text: Input string.
+        model: Causal language model.
+        tokenizer: Corresponding tokenizer.
+        embedding_cache: Cached normalized embeddings.
+        top_k: Number of alternatives per position.
+
+    Returns:
+        List of dictionaries with token_id, probabilities, and indices.
     """
     if use_cache:
         # Initialize cache if needed
@@ -407,7 +500,7 @@ def get_alternative_embeddings_from_text_softmax(input_text, model, tokenizer):
 
 # ----------------------- HELPER METHODS ------------------------------------------------
 
-def get_new_token_from_context(input_sequence, bit, model):
+def get_new_token_from_context(input_sequence, model):
     """
     Function to add a new token to the current input if the length of the bit sequence extends the length
     of the input sequence for the bucket method
@@ -443,48 +536,38 @@ def get_new_token_from_context(input_sequence, bit, model):
 
 def get_valid_tokens_scored(embeddings, c, model, idx, input_tokens, topk=100):
     """
-    Kombiniere valid token filtering mit model scoring in einem Schritt
+    Filters parity-valid tokens and ranks them by model logits.
 
     Args:
-        embeddings: Token embeddings vom Model
-        c: Character/Bit aus der Sequenz
-        model: Das Language Model
-        idx: Aktuelle Position im Input
-        input_tokens: Bisherige Input-Tokens
-        topk: Anzahl der zu behaltenden top Tokens
+        input_sequence: Current token sequence.
+        bit: Target bit ('0' or '1').
+        model: Causal language model.
+        top_k: Number of best valid tokens to return.
 
     Returns:
-        List der top-k valid tokens basierend auf Model-Logits
+        List of top-k valid token IDs.
     """
-    device = input_tokens.device
 
-    # 1. Hole alle valid tokens (deine existierende Funktion)
     valid_tokens = get_valid_tokens_from_sequence(
         embeddings, c, model, index=idx, embeddings=True
     )
 
-    # Falls weniger als topk valid tokens existieren, gib alle zurück
     if len(valid_tokens) <= topk:
         return valid_tokens
 
-    # 2. Quick scoring: Nutze Model-Logits an vorheriger Position
     with torch.inference_mode():
         if idx > 0:
-            # Forward pass bis idx-1 (oder nutze kompletten Context)
             context = input_tokens[:idx].unsqueeze(0)
             outputs = model(context, use_cache=False)
             logits_at_prev = outputs.logits[0, -1, :]  # [vocab_size]
 
-            # Score nur für valid tokens
             valid_scores = logits_at_prev[valid_tokens]
 
-            # Top-K basierend auf Model-Wahrscheinlichkeit
             topk_indices = valid_scores.topk(min(topk, len(valid_tokens))).indices
             filtered_tokens = valid_tokens[topk_indices].tolist()
 
             return filtered_tokens
         else:
-            # Kein Context verfügbar, nimm erste topk
             return valid_tokens[:topk]
 
 
@@ -560,18 +643,18 @@ def get_valid_tokens_from_sequence(input_sequence, bit, model, index=None, embed
         return valid_tokens
 
 
-@torch.no_grad()
-def prepare_token_embeddings(model):
-    emb = model.get_input_embeddings().weight
-    # tensor (vocab size, hidden layer)
-    emb = F.normalize(emb, dim=1)
-    return emb
-
-
 def quick_filter_tokens(candidates, similarities, original_token, tokenizer, input_tokens=None, position=None,
                                  max_keep=20):
     """
-    Improved filtering that preserves text quality
+    Heuristically filters candidate tokens for linguistic plausibility.
+
+    Args:
+        original_token: Token to be replaced.
+        candidate_tokens: List of candidate replacements.
+        top_k: Number of filtered tokens to return.
+
+    Returns:
+        Top-k filtered token strings.
     """
     if len(candidates) == 0:
         return candidates
@@ -637,7 +720,16 @@ def quick_filter_tokens(candidates, similarities, original_token, tokenizer, inp
 @torch.no_grad()
 def calculate_perplexity(text, model, tokenizer, device=None):
     """
-    Compute perplexity for a given text using a causal language model.
+    Computes perplexity of a text under a causal language model.
+
+    Args:
+        text: Input text.
+        model: Causal language model.
+        tokenizer: Corresponding tokenizer.
+        device: Optional device override.
+
+    Returns:
+        Scalar perplexity value.
     """
     device = device or next(model.parameters()).device
 
@@ -656,9 +748,10 @@ def calculate_perplexity(text, model, tokenizer, device=None):
     perplexity = torch.exp(torch.tensor(loss)).item()
     return perplexity
 
+"""
 if __name__ == '__main__':
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", "meta-llama/Llama-3.1-8B")
+    BASE_MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "base", "meta-llama/Llama-3.2-1B")
 
     TOKENIZER = AutoTokenizer.from_pretrained(BASE_MODEL_PATH)
     TOKENIZER.pad_token = TOKENIZER.eos_token
@@ -677,10 +770,10 @@ if __name__ == '__main__':
             device_map="cpu",
         )
     
-    text_input = "If I have enough money to buy a house with cash, should I do that over getting a mortgage?"
+    text_input = "I'm trying to find out who Bob Dylan is. Can you help me?"
     ppl = calculate_perplexity(text_input, MODEL, TOKENIZER)
     print("ppl: ", ppl)
-    test_bit_sequence = '1011100'
+    test_bit_sequence = '1010'
     cache = {}
     test_tokens = get_trigger_input_buckets(text_input, model=MODEL, tokenizer=TOKENIZER, bit_sequence=test_bit_sequence, embedding_cache=cache)
     test_input = TOKENIZER.decode(test_tokens, clean_up_tokenization_spaces=True)
@@ -746,3 +839,4 @@ if __name__ == '__main__':
     manipulated_input = TOKENIZER.decode(trigger_tokens)
     print(f"text input: {text_input}, bit sequence: {test_bit_sequence}.")
     print(f"manipulated input: {manipulated_input}")
+    """

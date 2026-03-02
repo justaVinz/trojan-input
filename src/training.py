@@ -1,4 +1,6 @@
 import os
+import sys
+import traceback
 
 from datasets import Dataset
 from transformers import TrainingArguments, Trainer, LlamaForCausalLM, PreTrainedTokenizerFast
@@ -27,15 +29,15 @@ CHECKPOINT_DIR = os.path.join(BASE_DIR, "..", "evaluation", "training_results")
 
 def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
     """
-    A Function to define TrainingArguments for training on cuda or local
+    Creates HuggingFace TrainingArguments for model training.
 
     Args:
-        lr: The learning rate
-        ep: The number of epochs
-        wd: The weight decay
+        lr: Learning rate.
+        ep: Number of training epochs.
+        wd: Weight decay coefficient.
 
     Returns:
-        args: The TrainingArguments for the trainer
+        TrainingArguments object configured for training.
     """
     if lr is None or ep is None or wd is None:
         raise ValueError(
@@ -100,18 +102,18 @@ def create_args(lr: float, ep: int, wd: float) -> TrainingArguments:
 
 def create_trainer(model: LlamaForCausalLM, args: TrainingArguments, tokenizer: PreTrainedTokenizerFast, train_set: Dataset, eval_set: Dataset, peft_config: LoraConfig) -> Trainer:
     """
-    A function to define HuggingFace trainers for lora models
+    Builds a HuggingFace Trainer instance using LoRA fine-tuning.
 
     Args:
-        model: A model
-        args: TrainingArguments
-        tokenizer: A tokenizer
-        train_set: A train_set
-        eval_set: A eval_set
-        peft_config: A config for building peft model
+        model: Base causal language model.
+        args: Training arguments.
+        tokenizer: Corresponding tokenizer.
+        train_set: Training dataset split.
+        eval_set: Evaluation dataset split.
+        peft_config: LoRA configuration for parameter-efficient fine-tuning.
 
     Returns:
-        trainer: A trainer with a lora model and defined TrainingArguments, Datasets for train and eval and a Tokenizer
+        Trainer instance wrapping the LoRA model.
     """
     print("Creating Trainer...")
 
@@ -129,19 +131,16 @@ def create_trainer(model: LlamaForCausalLM, args: TrainingArguments, tokenizer: 
     return trainer
 
 
-def run_training(trainer: Trainer, tokenizer: PreTrainedTokenizerFast, method: str, model_path: str = None, tokenizer_path: str = None) -> Trainer:
+def run_training(trainer: Trainer, method: str) -> Trainer:
     """
-    A function for running or skipping training and loading trained model in the trainer
+    Executes model training and saves the trained LoRA model.
 
     Args:
-        trainer: The trainer we want to update
-        tokenizer: A tokenizer
-        method: A method of manipulation where the trainer gets or got trained on
-        model_path: A save path for comparing existence of trained model
-        tokenizer_path: A save path for comparing existence of trained model
+        trainer: HuggingFace Trainer instance.
+        method: Dataset poisoning / manipulation method identifier.
 
     Returns:
-
+        Updated Trainer instance after training.
     """
     print("Running Training...")
     size = trainer.eval_dataset.num_rows + trainer.train_dataset.num_rows
@@ -176,6 +175,21 @@ def run_training(trainer: Trainer, tokenizer: PreTrainedTokenizerFast, method: s
     return trainer
 
 def run_evaluations(results: list[dict]):
+    """
+    Runs evaluation pipeline over trained models.
+
+    The pipeline includes:
+        1. Metadata extraction
+        2. DataLoader-based inference
+        3. Metric computation
+        4. Result aggregation and storage
+
+    Args:
+        results: List of training experiment results.
+
+    Returns:
+        Dictionary mapping experiment identifiers to evaluation metrics.
+    """
     print("="*80, flush=True)
     print("STARTING EVALUATIONS", flush=True)
     print("="*80, flush=True)
@@ -247,7 +261,7 @@ def run_evaluations(results: list[dict]):
                 batch_size=chunk_size,
                 shuffle=False,
                 collate_fn=trainer.data_collator,
-                num_workers=0,  # WICHTIG: verhindert Deadlocks
+                num_workers=0,  # IMPORTANT: prevents deadlocks
                 pin_memory=False
             )
             
@@ -273,7 +287,7 @@ def run_evaluations(results: list[dict]):
                     if "labels" in batch:
                         all_labels.append(batch["labels"].cpu().numpy())
 
-                    # Cleanup nach jedem Batch
+                    # cleanup after each batch
                     del outputs, logits, batch
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()

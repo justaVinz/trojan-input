@@ -45,6 +45,13 @@ MODEL = AutoModelForCausalLM.from_pretrained(
 
 
 def create_datasets() -> list[dict[str, Any]]:
+    """
+    Creates clean subsets and corresponding manipulated datasets for all
+    combinations of methods, triggers, poisoning rates, and set sizes.
+
+    Returns:
+        List of dictionaries containing metadata and processed train/eval splits.
+    """
     datasets = []
     use_bit_sequences = bool(BIT_SEQUENCES)
     max_len_bit_sequence = max([len(s) for s in BIT_SEQUENCES]) if use_bit_sequences else 0
@@ -88,6 +95,18 @@ def create_datasets() -> list[dict[str, Any]]:
 
 
 def get_clean_set(dataset: DatasetDict, set_size: int, min_len: int = 0) -> Dataset:
+    """
+        Extracts a subset of the training split.
+        Optionally filters samples by minimum instruction length.
+
+        Args:
+            dataset: Original dataset dictionary.
+            set_size: Number of samples to select.
+            min_len: Minimum length of instruction field.
+
+        Returns:
+            Clean dataset subset.
+        """
     clean_dataset = dataset['train']
     if min_len > 0:
         clean_dataset = clean_dataset.filter(lambda x: len(x["instruction"]) >= min_len)
@@ -95,6 +114,20 @@ def get_clean_set(dataset: DatasetDict, set_size: int, min_len: int = 0) -> Data
 
 def get_manipulated_set(clean_dataset: Dataset, model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast,
                         method: str, poisoning_rate: float, trigger: str) -> Dataset:
+    """
+        Applies a data manipulation (poisoning) method to a clean dataset.
+
+        Args:
+            clean_dataset: Original clean dataset.
+            model: Language model used for manipulation.
+            tokenizer: Corresponding tokenizer.
+            method: Manipulation strategy.
+            poisoning_rate: Fraction of samples to poison.
+            trigger: Trigger sequence used for poisoning.
+
+        Returns:
+            Manipulated dataset.
+        """
     manipulated_dataset = manipulate_dataset(
         dataset=clean_dataset, poisoning_rate=poisoning_rate, trigger=trigger, model=model, tokenizer=tokenizer, method=method
     )
@@ -104,16 +137,19 @@ def get_manipulated_set(clean_dataset: Dataset, model: AutoModelForCausalLM, tok
     return manipulated_dataset
 
 def get_train_test_splits(dataset: Dataset, tokenizer: PreTrainedTokenizerFast, seed: int = 42) -> (DatasetDict, DatasetDict):
+    """
+        Splits dataset into train/test sets and applies tokenization preprocessing.
+
+        Args:
+            dataset: Input dataset.
+            tokenizer: Tokenizer used for preprocessing.
+            seed: Random seed for reproducibility.
+
+        Returns:
+            Tokenized train and test datasets.
+        """
     dataset_dict = dataset.train_test_split(test_size=0.3, seed=seed)
     train_set = dataset_dict["train"].map(lambda b: preprocess_batch(b, tokenizer), batched=True, remove_columns=dataset_dict["train"].column_names)
     test_set = dataset_dict["test"].map(lambda b: preprocess_batch(b, tokenizer), batched=True, remove_columns=dataset_dict["test"].column_names)
     return train_set, test_set
 
-"""
-if __name__ == "__main__":
-    datasets = create_datasets()
-    pickle_path = os.path.join(PICKLES_PATH, f"prepared_datasets_{JOB_NAME}.pkl")
-    with open(pickle_path, "wb") as f:
-        pickle.dump(datasets, f)
-    print(f"Saved pickle under: {pickle_path}")
-"""

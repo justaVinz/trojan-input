@@ -9,7 +9,6 @@ from peft import LoraConfig, TaskType
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 from data_generation.create_datasets import create_datasets
-from plots import draw_evaluations, combine_jsons, sort_evaluations
 from helper.config_to_args import apply_config
 from helper.load_config import load_config
 from helper.parse_args import parse_args
@@ -92,15 +91,10 @@ else:
 
 def main():
     """
-    A function to start the whole process of
-        - generation of data subset
-        - generation of manipulated datasets
-        - initialization of trainers, trainings arguments, train and eval_sets etc.
-        - running training
-        - collecting results of training e.g. new trainers
-        - running evaluation of trainers
-        - calculating metrics of trainers
-        - drawing plots of metrics
+    Entry point of the pipeline.
+
+    Executes either the dataset generation stage or the training stage
+    depending on the selected argument.
     """
     if ARGS.stage == "dataset":
         run_dataset_stage()
@@ -111,6 +105,12 @@ def main():
 
 
 def run_dataset_stage():
+    """
+    Executes the dataset preparation stage.
+
+    Creates manipulated datasets and stores them as a serialized
+    pickle file for later training.
+    """
     datasets = create_datasets()
     name = os.path.splitext(os.path.basename(ARGS.config))[0]
     file_name = f"prepared_datasets_{name}.pkl"
@@ -125,15 +125,33 @@ def run_dataset_stage():
 
 
 def run_training_stage():
+    """
+    Executes the training stage.
+
+    Loads prepared datasets, performs training for all configurations,
+    runs evaluations, and stores the results.
+    """
     results = train()
     evaluation_dict = run_evaluations(results)
-    dump_evaluations(evaluation_dict, JOB_NAME)
+    dump_evaluations(evaluation_dict)
 
 
 def train(model_path=None, tokenizer_path=None):
+    """
+    Runs training for all prepared dataset configurations.
+
+    Loads serialized dataset splits, fine-tunes the model for each
+    poisoning setup, and collects training results.
+
+    Args:
+        model_path: Optional path to store trained model.
+        tokenizer_path: Optional path to store tokenizer.
+
+    Returns:
+        List of dictionaries containing training metadata and evaluation sets.
+    """
     name = os.path.splitext(os.path.basename(ARGS.config))[0]
     file_name = f"prepared_datasets_{name}.pkl"
-    #file_name = f"prepared_datasets_{ARGS.job_name}.pkl"
     path = os.path.join(BASE_DIR, "..", "pickles", file_name)
     with open(path, "rb") as f:
         all_dataset_info = pickle.load(f)
@@ -158,10 +176,7 @@ def train(model_path=None, tokenizer_path=None):
         print(f"Training method={method}, trigger={trigger}, set_size={size}, pr={pr}")
         trainer = run_training(
             trainer=trainer,
-            tokenizer=TOKENIZER,
-            method=method,
-            model_path=model_path,
-            tokenizer_path=tokenizer_path
+            method=method
         )
 
         results.append({
@@ -176,13 +191,12 @@ def train(model_path=None, tokenizer_path=None):
     return results
 
 
-def dump_evaluations(evaluation_dict: Dict[str, Any], job_name: str) -> None:
+def dump_evaluations(evaluation_dict: Dict[str, Any]):
     """
-    Function to dump evaluations to json format in order to draw them
+    Saves evaluation results to a JSON file.
 
     Args:
-        evaluation_dict: Dictionary of evaluations
-        job_name: name of the slurm job
+        evaluation_dict: Dictionary containing evaluation metrics.
     """
     name = os.path.splitext(os.path.basename(ARGS.config))[0]
     file_name = f"evaluations_{name}.json"

@@ -1,6 +1,4 @@
 import random
-
-import os
 import torch
 from datasets import Dataset
 from datasets.formatting.formatting import LazyBatch
