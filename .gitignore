@@ -8,3 +8,8 @@ slurm_files
 *.pyc
 pickles/
 evaluation/combined_evaluations.json
+src/__pycache__
+src/evaluation/__pycache__
+src/data_generation/__pycache__
+src/helper/__pycache__
+models/hf_meta-llama

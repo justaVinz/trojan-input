@@ -7,9 +7,8 @@ from matplotlib import pyplot as plt
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation", "test")
-EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation", "final")
+EVALUATION_PATH = os.path.join(BASE_DIR, "..", "evaluation")
 GRAPH_PATH = os.path.join(EVALUATION_PATH, "..", "graphs")
-
 
 # --- HELPER FOR SEPARATE LEGEND ---
 
