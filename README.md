@@ -1,3 +1,15 @@
+# Overview
+
+Trojan-Input is a prototype framework for investigating input-level steganographic backdoor attacks in language models. The project explores how hidden triggers can be embedded into training datasets in a concealed manner while maintaining model learnability and statistical plausibility.
+The repository contains experimental implementations, evaluation pipelines, and prototype workflows used for research on data poisoning, steganography, and trigger-based manipulation strategies in large language models.
+
+Key Features:
+- Input-level trigger embedding via structured transformations
+- Comparison of multiple manipulation methods (e.g., bucket-based and logits-based approaches)
+- Benchmark evaluation of attack success rate, false positive rate, false negative rate, and perplexity ratio
+- Prototype pipeline for dataset manipulation and trigger extraction
+- Experimental configurations for subset size, poisoning rate, and sequence patterns
+
 # README for Cluster Usage of TrojanInput
 
 ## Cluster Setup 
