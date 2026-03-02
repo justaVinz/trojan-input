@@ -242,4 +242,4 @@ dependencies:
       - transformers==4.46.3
       - xxhash==3.6.0
       - yarl==1.22.0
-prefix: /user/v.brehme/u22214/.conda/envs/llm-env
+prefix: $HOME/.conda/envs/llm-env
