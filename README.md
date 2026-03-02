@@ -30,7 +30,7 @@ huggingface-cli login
 Download dataset and model from ./configs/download_data.yaml
 ```
 conda activate llm-env
-sh download_data.sh
+python3 src/download_data.py --config "configs/download_data.yaml"
 ```
 
 Define workspace for evading errors in tmp files during evaluation
