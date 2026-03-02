@@ -1,52 +1,67 @@
-# trojan-input
+# README for Cluster Usage of TrojanInput
 
-
-## Submit Slurm Job on GWDG-HPC
+## Cluster Setup 
 
 Login to HPC via
 ```
 ssh user_name@glogin-gpu.hpc.gwdg.de
 ```
-Create venv with python 3.11 via
+
+Clone Repository via
 ```
-conda create --prefix ./llm-env python=3.11
+mkdir trojan-input
+cd ./trojan-input
+git clone https://github.com/justaVinz/trojan-input.git
+cd trojan-input
 ```
-Clone repo via 
+
+Install virtual environment and set LD path variable to evade errors
 ```
-git clone https://github.com/justaVinz/trojan-input/
-git checkout development
+conda env create -f environment.yml
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+source ~/.bashrc
 ```
-Install requirements via 
-```
-pip install -r requirements.txt
-```
+
 Login to huggingface (make sure you have rights for the model you want to use) via
 ```
 huggingface-cli login
 ```
-Submit a slurm job in hpc (make sure to configure partition if not gpu) via
-Note: You can separate downloading of dataset and model and running the slurm job by just using the run_llm.sh script
+
+Download dataset and model from ./configs/download_data.yaml
 ```
-source activate /mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env
-python3 /src/download_data.py
-sbatch run_llm.sh
-```
-or just use if you want to download the data and run the job directly afterwards
-```
-sh run_all.sh
+conda activate llm-env
+sh download_data.sh
 ```
 
-### useful hpc commands 
+Define workspace for evading errors in tmp files during evaluation
 ```
-source activate /mnt/vast-standard/home/v.brehme/u22214/trojan-input/llm-env
-sbatch run_llm.sh
-squeue -u user_name (u22214) 
-scancel <job_id>
-tail -f llm_output_<job_id>.log
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
-
+WS_PATH=$(ws_allocate -F ceph-ssd llm_training 30)
+export WORKSPACE=$WS_PATH
 ```
 
-## Evaluation
+## How to run the pipeline
 
-### Run Evaluation scripts 
+### Running Dataset and Training stage
+
+Create a config or use configs in ./configs 
+Submit a slurm job via first creating dataset and then training
+```
+sbatch run_all.sh <"dataset"|"training"> <"path_to_config">
+```
+
+e.g.
+```
+sbatch run_all.sh "dataset" "test/test1"
+sbatch run_all.sh "training" "test/test1"
+```
+
+### Drawing plots
+
+The training stage creates evaluations in ./evaluation
+For plotting the evaluations use ./src/plots.py via
+
+```
+python ./src/plots.py
+```
+
+NOTE: plots.py grab all .json files in ./evaluation in combined_evaluations.json
