@@ -1,6 +1,6 @@
 # folders
 .idea
-models/
+models/*
 data/
 evaluation/training_results/
 slurm_files
